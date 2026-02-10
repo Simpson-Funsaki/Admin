@@ -1,56 +1,62 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { useRouter } from 'next/navigation';
 
 function VerifiedContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const [status, setStatus] = useState('verifying'); // verifying, success, error
+  const [status, setStatus] = useState('verifying');
   const [message, setMessage] = useState('');
-
-  // Create Supabase client
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  );
 
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        // Get URL parameters
-        const type = searchParams.get('type');
-        const access_token = searchParams.get('access_token');
-        const refresh_token = searchParams.get('refresh_token');
+        // Parse tokens from URL hash
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        
+        const type = hashParams.get('type');
+        const access_token = hashParams.get('access_token');
+        const refresh_token = hashParams.get('refresh_token');
 
-        // Check if we have the required parameters
         if (!access_token || !refresh_token) {
           setStatus('error');
           setMessage('Missing authentication tokens');
           return;
         }
 
-        // Set the session with the tokens from URL
-        const { data, error } = await supabase.auth.setSession({
-          access_token: access_token,
-          refresh_token: refresh_token,
+        // Send tokens to YOUR backend to handle securely
+        const response = await fetch('/api/auth/set-session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            access_token,
+            refresh_token,
+            type
+          }),
         });
 
-        if (error) {
-          console.error('Error setting session:', error);
+        if (!response.ok) {
+          const errorData = await response.json();
           setStatus('error');
-          setMessage(error.message || 'Authentication failed');
+          setMessage(errorData.message || 'Authentication failed');
           return;
         }
 
-        // Success! User is now authenticated
+        const data = await response.json();
+        console.log('Session set successfully via backend:', data);
+
+        // Success!
         setStatus('success');
         setMessage(type === 'signup' ? 'Email verified successfully!' : 'Authentication successful!');
 
-        // Redirect to dashboard or home after 2 seconds
+        // Clean up URL
+        window.history.replaceState(null, '', window.location.pathname);
+
+        // Redirect after 2 seconds
         setTimeout(() => {
-          router.push('/dashboard'); // Change this to your desired redirect path
+          router.push('/dashboard');
         }, 2000);
 
       } catch (err) {
@@ -61,7 +67,7 @@ function VerifiedContent() {
     };
 
     handleAuthCallback();
-  }, [searchParams, supabase.auth, router]);
+  }, [router]);
 
   return (
     <div className="verified-container">
