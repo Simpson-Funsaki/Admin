@@ -18,6 +18,12 @@ function VerifiedContent() {
         const access_token = hashParams.get('access_token');
         const refresh_token = hashParams.get('refresh_token');
 
+        console.log('Parsed tokens:', { 
+          type, 
+          access_token: access_token?.substring(0, 20) + '...', 
+          refresh_token: refresh_token?.substring(0, 20) + '...'
+        });
+
         if (!access_token || !refresh_token) {
           setStatus('error');
           setMessage('Missing authentication tokens');
