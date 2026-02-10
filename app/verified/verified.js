@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
-export default function VerifiedPage() {
+function VerifiedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState('verifying'); // verifying, success, error
@@ -251,5 +251,39 @@ export default function VerifiedPage() {
         }
       `}</style>
     </div>
+  );
+}
+
+export default function VerifiedPage() {
+  return (
+    <Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+      }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '16px',
+          padding: '48px 40px',
+          textAlign: 'center'
+        }}>
+          <div style={{
+            margin: '0 auto 24px',
+            width: '48px',
+            height: '48px',
+            border: '4px solid #f3f4f6',
+            borderTopColor: '#667eea',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite'
+          }}></div>
+          <h1>Loading...</h1>
+        </div>
+      </div>
+    }>
+      <VerifiedContent />
+    </Suspense>
   );
 }
