@@ -19,6 +19,7 @@ import {
   IconAlertCircle,
   IconArrowLeft,
   IconSparkles,
+  IconX,
 } from "@tabler/icons-react";
 
 const RegisterPage = () => {
@@ -26,6 +27,16 @@ const RegisterPage = () => {
     fullName: "",
     password: "",
     email: "",
+  });
+  const [errors, setErrors] = useState({
+    fullName: "",
+    email: "",
+    password: "",
+  });
+  const [touched, setTouched] = useState({
+    fullName: false,
+    email: false,
+    password: false,
   });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -35,22 +46,120 @@ const RegisterPage = () => {
   const router = useRouter();
   const apiFetch = useApi();
 
+  // Validation functions matching backend rules
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) return "Email is required";
+    if (!emailRegex.test(email)) return "Please provide a valid email";
+    return "";
+  };
+
+  const validatePassword = (password) => {
+    if (!password) return "Password is required";
+    if (password.length < 8)
+      return "Password must be at least 8 characters long";
+    if (!/(?=.*[a-z])/.test(password))
+      return "Password must contain at least one lowercase letter";
+    if (!/(?=.*[A-Z])/.test(password))
+      return "Password must contain at least one uppercase letter";
+    if (!/(?=.*\d)/.test(password))
+      return "Password must contain at least one number";
+    return "";
+  };
+
+  const validateFullName = (fullName) => {
+    const trimmed = fullName.trim();
+    if (!trimmed) return "Full name is required";
+    if (trimmed.length < 2) return "Full name must be at least 2 characters";
+    return "";
+  };
+
+  // Real-time validation
+  const validateField = (name, value) => {
+    switch (name) {
+      case "email":
+        return validateEmail(value);
+      case "password":
+        return validatePassword(value);
+      case "fullName":
+        return validateFullName(value);
+      default:
+        return "";
+    }
+  };
+
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setError("");
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: value,
     });
+
+    // Validate on change if field has been touched
+    if (touched[name]) {
+      setErrors({
+        ...errors,
+        [name]: validateField(name, value),
+      });
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setTouched({
+      ...touched,
+      [name]: true,
+    });
+    setErrors({
+      ...errors,
+      [name]: validateField(name, value),
+    });
+    setFocusedField("");
+  };
+
+  const handleFocus = (fieldName) => {
+    setFocusedField(fieldName);
+  };
+
+  const validateForm = () => {
+    const newErrors = {
+      fullName: validateFullName(formData.fullName),
+      email: validateEmail(formData.email),
+      password: validatePassword(formData.password),
+    };
+
+    setErrors(newErrors);
+    setTouched({
+      fullName: true,
+      email: true,
+      password: true,
+    });
+
+    return !Object.values(newErrors).some((error) => error !== "");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields
+    if (!validateForm()) {
+      setError("Please fix the errors before submitting");
+      return;
+    }
 
     setLoading(true);
     setError("");
     setSuccess("");
 
     try {
+      // Normalize email and trim fullName to match backend processing
+      const normalizedData = {
+        email: formData.email.toLowerCase().trim(),
+        password: formData.password,
+        fullName: formData.fullName.trim(),
+      };
+
       const response = await apiFetch(
         `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/register`,
         {
@@ -58,7 +167,7 @@ const RegisterPage = () => {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(normalizedData),
         },
       );
 
@@ -124,6 +233,19 @@ const RegisterPage = () => {
     };
   }, [vantaEffect]);
 
+  // Password strength indicator
+  const getPasswordStrength = (password) => {
+    let strength = 0;
+    if (password.length >= 8) strength++;
+    if (/(?=.*[a-z])/.test(password)) strength++;
+    if (/(?=.*[A-Z])/.test(password)) strength++;
+    if (/(?=.*\d)/.test(password)) strength++;
+    if (/(?=.*[@$!%*?&#])/.test(password)) strength++;
+    return strength;
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
+
   return (
     <>
       <div ref={vantaRef} className="fixed inset-0 -z-10 pointer-events-none" />
@@ -161,7 +283,11 @@ const RegisterPage = () => {
             </div>
 
             {/* Registration Form */}
-            <div className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 md:p-10 shadow-2xl">
+            <form
+              onSubmit={handleSubmit}
+              className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 md:p-10 shadow-2xl"
+              noValidate
+            >
               <div className="space-y-6">
                 {/* Username and Email Row */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -179,17 +305,44 @@ const RegisterPage = () => {
                         placeholder="Enter your Full Name"
                         value={formData.fullName}
                         onChange={handleChange}
-                        onFocus={() => setFocusedField("fullName")}
-                        onBlur={() => setFocusedField("")}
-                        autoComplete="fullName"
+                        onFocus={() => handleFocus("fullName")}
+                        onBlur={handleBlur}
+                        autoComplete="name"
                         className={cn(
-                          "h-12 bg-white/5 border border-white/10 text-white placeholder:text-neutral-500",
-                          "focus:border-cyan-500/50 focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-300",
-                          focusedField === "username" &&
+                          "h-12 bg-white/5 border text-white placeholder:text-neutral-500",
+                          "focus:bg-white/10 focus:ring-2 transition-all duration-300",
+                          errors.fullName && touched.fullName
+                            ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
+                            : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/20",
+                          focusedField === "fullName" &&
+                            !errors.fullName &&
                             "shadow-lg shadow-cyan-500/10",
                         )}
+                        aria-invalid={errors.fullName && touched.fullName}
+                        aria-describedby={
+                          errors.fullName && touched.fullName
+                            ? "fullName-error"
+                            : undefined
+                        }
                       />
+                      {errors.fullName && touched.fullName && (
+                        <IconX className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />
+                      )}
+                      {!errors.fullName &&
+                        touched.fullName &&
+                        formData.fullName && (
+                          <IconCheck className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-400" />
+                        )}
                     </div>
+                    {errors.fullName && touched.fullName && (
+                      <p
+                        id="fullName-error"
+                        className="text-xs text-red-400 flex items-center gap-1 mt-1"
+                      >
+                        <IconAlertCircle className="w-3 h-3" />
+                        {errors.fullName}
+                      </p>
+                    )}
                   </LabelInputContainer>
 
                   <LabelInputContainer>
@@ -206,17 +359,42 @@ const RegisterPage = () => {
                         placeholder="your.email@example.com"
                         value={formData.email}
                         onChange={handleChange}
-                        onFocus={() => setFocusedField("email")}
-                        onBlur={() => setFocusedField("")}
+                        onFocus={() => handleFocus("email")}
+                        onBlur={handleBlur}
                         autoComplete="email"
                         className={cn(
-                          "h-12 bg-white/5 border border-white/10 text-white placeholder:text-neutral-500",
-                          "focus:border-cyan-500/50 focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-300",
+                          "h-12 bg-white/5 border text-white placeholder:text-neutral-500",
+                          "focus:bg-white/10 focus:ring-2 transition-all duration-300",
+                          errors.email && touched.email
+                            ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
+                            : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/20",
                           focusedField === "email" &&
+                            !errors.email &&
                             "shadow-lg shadow-cyan-500/10",
                         )}
+                        aria-invalid={errors.email && touched.email}
+                        aria-describedby={
+                          errors.email && touched.email
+                            ? "email-error"
+                            : undefined
+                        }
                       />
+                      {errors.email && touched.email && (
+                        <IconX className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />
+                      )}
+                      {!errors.email && touched.email && formData.email && (
+                        <IconCheck className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-400" />
+                      )}
                     </div>
+                    {errors.email && touched.email && (
+                      <p
+                        id="email-error"
+                        className="text-xs text-red-400 flex items-center gap-1 mt-1"
+                      >
+                        <IconAlertCircle className="w-3 h-3" />
+                        {errors.email}
+                      </p>
+                    )}
                   </LabelInputContainer>
                 </div>
 
@@ -235,15 +413,25 @@ const RegisterPage = () => {
                       placeholder="Create a strong password"
                       value={formData.password}
                       onChange={handleChange}
-                      onFocus={() => setFocusedField("password")}
-                      onBlur={() => setFocusedField("")}
+                      onFocus={() => handleFocus("password")}
+                      onBlur={handleBlur}
                       autoComplete="new-password"
                       className={cn(
-                        "h-12 bg-white/5 border border-white/10 text-white placeholder:text-neutral-500 pr-12",
-                        "focus:border-cyan-500/50 focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-300",
+                        "h-12 bg-white/5 border text-white placeholder:text-neutral-500 pr-12",
+                        "focus:bg-white/10 focus:ring-2 transition-all duration-300",
+                        errors.password && touched.password
+                          ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
+                          : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/20",
                         focusedField === "password" &&
+                          !errors.password &&
                           "shadow-lg shadow-cyan-500/10",
                       )}
+                      aria-invalid={errors.password && touched.password}
+                      aria-describedby={
+                        errors.password && touched.password
+                          ? "password-error"
+                          : "password-help"
+                      }
                     />
                     <button
                       type="button"
@@ -260,9 +448,55 @@ const RegisterPage = () => {
                       )}
                     </button>
                   </div>
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Use at least 8 characters with a mix of letters and numbers
-                  </p>
+
+                  {/* Password Strength Indicator */}
+                  {formData.password && (
+                    <div className="space-y-2">
+                      <div className="flex gap-1">
+                        {[1, 2, 3, 4].map((level) => (
+                          <div
+                            key={level}
+                            className={cn(
+                              "h-1 flex-1 rounded-full transition-all duration-300",
+                              passwordStrength >= level
+                                ? passwordStrength === 1
+                                  ? "bg-red-500"
+                                  : passwordStrength === 2
+                                    ? "bg-orange-500"
+                                    : passwordStrength === 3
+                                      ? "bg-yellow-500"
+                                      : "bg-green-500"
+                                : "bg-white/10",
+                            )}
+                          />
+                        ))}
+                      </div>
+                      <p className="text-xs text-neutral-400">
+                        {passwordStrength === 1 && "Weak password"}
+                        {passwordStrength === 2 && "Fair password"}
+                        {passwordStrength === 3 && "Good password"}
+                        {passwordStrength >= 4 && "Strong password"}
+                      </p>
+                    </div>
+                  )}
+
+                  {errors.password && touched.password ? (
+                    <p
+                      id="password-error"
+                      className="text-xs text-red-400 flex items-center gap-1 mt-1"
+                    >
+                      <IconAlertCircle className="w-3 h-3" />
+                      {errors.password}
+                    </p>
+                  ) : (
+                    <p
+                      id="password-help"
+                      className="text-xs text-neutral-500 mt-1"
+                    >
+                      Must be 8+ characters with uppercase, lowercase, and
+                      number
+                    </p>
+                  )}
                 </LabelInputContainer>
 
                 {/* Error Message */}
@@ -283,8 +517,7 @@ const RegisterPage = () => {
 
                 {/* Submit Button */}
                 <button
-                  type="button"
-                  onClick={handleSubmit}
+                  type="submit"
                   disabled={loading || success}
                   className={cn(
                     "w-full h-12 md:h-13 rounded-lg font-semibold text-white relative overflow-hidden group transition-all duration-300",
@@ -337,7 +570,7 @@ const RegisterPage = () => {
                   </button>
                 </div>
               </div>
-            </div>
+            </form>
 
             {/* Features */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">

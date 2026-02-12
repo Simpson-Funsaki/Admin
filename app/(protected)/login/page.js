@@ -13,6 +13,8 @@ import {
   IconLock,
   IconUser,
   IconAlertCircle,
+  IconCheck,
+  IconX,
 } from "@tabler/icons-react";
 import { useAuth } from "../context/authContext";
 import React, { Suspense } from "react";
@@ -26,6 +28,14 @@ const LoginContent = () => {
     email: "",
     password: "",
   });
+  const [errors, setErrors] = useState({
+    email: "",
+    password: "",
+  });
+  const [touched, setTouched] = useState({
+    email: false,
+    password: false,
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,20 +46,99 @@ const LoginContent = () => {
     if (!isAuthLoading && isAuthenticated) router.replace("/admin");
   }, [isAuthenticated, isAuthLoading, router]);
 
+  // Validation functions
+  const validateEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email) return "Email is required";
+    if (!emailRegex.test(email)) return "Please provide a valid email";
+    return "";
+  };
+
+  const validatePassword = (password) => {
+    if (!password) return "Password is required";
+    if (password.length < 8) return "Password must be at least 8 characters";
+    return "";
+  };
+
+  const validateField = (name, value) => {
+    switch (name) {
+      case "email":
+        return validateEmail(value);
+      case "password":
+        return validatePassword(value);
+      default:
+        return "";
+    }
+  };
+
   const handleChange = (e) => {
-    setError(""); // Clear error on input change
+    const { name, value } = e.target;
+    setError("");
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
+
+    // Validate on change if field has been touched
+    if (touched[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: validateField(name, value),
+      }));
+    }
+  };
+
+  const handleBlur = (e) => {
+    const { name, value } = e.target;
+    setTouched((prev) => ({
+      ...prev,
+      [name]: true,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      [name]: validateField(name, value),
+    }));
+    setFocusedField("");
+  };
+
+  const handleFocus = (fieldName) => {
+    setFocusedField(fieldName);
+  };
+
+  const validateForm = () => {
+    const newErrors = {
+      email: validateEmail(formData.email),
+      password: validatePassword(formData.password),
+    };
+
+    setErrors(newErrors);
+    setTouched({
+      email: true,
+      password: true,
+    });
+
+    return !Object.values(newErrors).some((error) => error !== "");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validate all fields
+    if (!validateForm()) {
+      setError("Please fix the errors before submitting");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
     try {
+      // Normalize email to match backend processing
+      const normalizedData = {
+        email: formData.email.toLowerCase().trim(),
+        password: formData.password,
+      };
+
       const res = await fetch(`/api/auth/login`, {
         method: "POST",
         credentials: "include",
@@ -57,7 +146,7 @@ const LoginContent = () => {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(normalizedData),
       });
 
       const data = await res.json();
@@ -160,11 +249,12 @@ const LoginContent = () => {
           <form
             onSubmit={handleSubmit}
             className="backdrop-blur-xl bg-white/5 border border-white/10 rounded-2xl p-8 shadow-2xl space-y-6 relative overflow-hidden"
+            noValidate
           >
             {/* Gradient overlay on focus */}
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-indigo-500/5 opacity-0 transition-opacity duration-500 pointer-events-none group-focus-within:opacity-100"></div>
 
-            {/* Username Field */}
+            {/* Email Field */}
             <LabelInputContainer>
               <Label className="text-sm text-neutral-300 font-medium flex items-center gap-2">
                 <IconUser className="w-4 h-4 text-cyan-400" />
@@ -173,22 +263,46 @@ const LoginContent = () => {
               <div className="relative group">
                 <Input
                   name="email"
-                  value={formData.username}
+                  type="email"
+                  value={formData.email}
                   onChange={handleChange}
-                  onFocus={() => setFocusedField("email")}
-                  onBlur={() => setFocusedField("")}
+                  onFocus={() => handleFocus("email")}
+                  onBlur={handleBlur}
                   required
                   autoComplete="email"
                   className={cn(
-                    "bg-white/5 border border-white/10 text-white h-12 rounded-lg transition-all duration-300",
-                    "focus:border-cyan-500/50 focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/20",
+                    "bg-white/5 border text-white h-12 rounded-lg transition-all duration-300",
+                    "focus:bg-white/10 focus:ring-2",
                     "placeholder:text-neutral-500",
-                    focusedField === "username" &&
+                    errors.email && touched.email
+                      ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
+                      : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/20",
+                    focusedField === "email" &&
+                      !errors.email &&
                       "shadow-lg shadow-cyan-500/10",
                   )}
                   placeholder="Enter your email"
+                  aria-invalid={errors.email && touched.email}
+                  aria-describedby={
+                    errors.email && touched.email ? "email-error" : undefined
+                  }
                 />
+                {errors.email && touched.email && (
+                  <IconX className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-red-400" />
+                )}
+                {!errors.email && touched.email && formData.email && (
+                  <IconCheck className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-green-400" />
+                )}
               </div>
+              {errors.email && touched.email && (
+                <p
+                  id="email-error"
+                  className="text-xs text-red-400 flex items-center gap-1 mt-1"
+                >
+                  <IconAlertCircle className="w-3 h-3" />
+                  {errors.email}
+                </p>
+              )}
             </LabelInputContainer>
 
             {/* Password Field */}
@@ -203,23 +317,33 @@ const LoginContent = () => {
                   type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={handleChange}
-                  onFocus={() => setFocusedField("password")}
-                  onBlur={() => setFocusedField("")}
+                  onFocus={() => handleFocus("password")}
+                  onBlur={handleBlur}
                   required
                   autoComplete="current-password"
                   className={cn(
-                    "bg-white/5 border border-white/10 text-white h-12 rounded-lg pr-12 transition-all duration-300",
-                    "focus:border-cyan-500/50 focus:bg-white/10 focus:ring-2 focus:ring-cyan-500/20",
+                    "bg-white/5 border text-white h-12 rounded-lg pr-12 transition-all duration-300",
+                    "focus:bg-white/10 focus:ring-2",
                     "placeholder:text-neutral-500",
+                    errors.password && touched.password
+                      ? "border-red-500/50 focus:border-red-500/50 focus:ring-red-500/20"
+                      : "border-white/10 focus:border-cyan-500/50 focus:ring-cyan-500/20",
                     focusedField === "password" &&
+                      !errors.password &&
                       "shadow-lg shadow-cyan-500/10",
                   )}
                   placeholder="Enter your password"
+                  aria-invalid={errors.password && touched.password}
+                  aria-describedby={
+                    errors.password && touched.password
+                      ? "password-error"
+                      : undefined
+                  }
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-cyan-400 transition-colors duration-200"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-cyan-400 transition-colors duration-200 z-10"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -229,12 +353,27 @@ const LoginContent = () => {
                   )}
                 </button>
               </div>
+              <div className="flex items-center justify-between">
+                {errors.password && touched.password ? (
+                  <p
+                    id="password-error"
+                    className="text-xs text-red-400 flex items-center gap-1 mt-1"
+                  >
+                    <IconAlertCircle className="w-3 h-3" />
+                    {errors.password}
+                  </p>
+                ) : (
+                  <div></div>
+                )}
                 <button
+                  type="button"
                   onClick={() => router.push("/login/reset")}
-                  className="text-blue-600 dark:text-blue-700 hover:text-blue-800 text-sm font-medium mb-2 cursor-pointer relative -right-32"
+                  className="text-cyan-400 hover:text-cyan-300 text-xs font-medium transition-colors duration-200 cursor-pointer relative group"
                 >
-                  Forgot Password ?
+                  Forgot Password?
+                  <span className="absolute bottom-0 left-0 w-0 h-px bg-cyan-400 group-hover:w-full transition-all duration-300"></span>
                 </button>
+              </div>
             </LabelInputContainer>
 
             {/* Error Message */}
