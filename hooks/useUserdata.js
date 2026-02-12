@@ -70,9 +70,18 @@ export default function useUserProfile(options = {}) {
         throw new Error("Invalid preferences response structure");
       }
 
-      // Role (slug + name)
-      const roleSlug = userData.userRoles?.[0]?.role?.slug ?? "user";
-      const roleName = userData.userRoles?.[0]?.role?.name ?? "User";
+      // Role (slug + name) - Check if admin role exists in roles array
+      const hasAdminRole = userData.userRoles?.some(
+        (userRole) => userRole.role?.slug === "admin",
+      );
+
+      const roleSlug = hasAdminRole
+        ? "admin"
+        : (userData.userRoles?.[0]?.role?.slug ?? "user");
+
+      const roleName = hasAdminRole
+        ? "Admin"
+        : (userData.userRoles?.[0]?.role?.name ?? "User");
 
       // Map server response to profile state
       const mappedProfile = {
@@ -107,7 +116,7 @@ export default function useUserProfile(options = {}) {
         emailAlerts: preferences.emailNotifications,
         profileVisibility: preferences.visibility,
       };
-
+      console.log(mappedProfile);
       setUserProfile(mappedProfile);
 
       if (includeImage && mappedProfile.avatar) {
