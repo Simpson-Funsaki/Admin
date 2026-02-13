@@ -377,9 +377,19 @@ export default function RBACManagement() {
   };
 
   // Assign a role to a user
-  const assignRoleToUser = async (userId, roleId) => {
+  const assignRoleToUser = async (userId, roleId, projectName, projectId) => {
     try {
       setIsAssigningRole(true);
+      console.log(
+        "userid--",
+        userId,
+        "roleid--",
+        roleId,
+        "projectname--",
+        projectName,
+        "projectid--",
+        projectId,
+      );
       const response = await apiFetch(
         `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}/roles`,
         {
@@ -387,7 +397,11 @@ export default function RBACManagement() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ roleId: roleId }),
+          body: JSON.stringify({
+            roleId: roleId,
+            projectName: projectName,
+            projectId: projectId,
+          }),
         },
       );
 
@@ -493,7 +507,8 @@ export default function RBACManagement() {
         username: profile.username || profile.fullName,
         email: profile.email,
         fullName: profile.fullName,
-
+projectId: profile.projectId,
+projectName: profile.projectName,
         // Map all roles as an array
         roles:
           profile.userRoles?.map((userRole) => ({
@@ -551,7 +566,6 @@ export default function RBACManagement() {
         // Keep original data for reference
         originalData: profile,
       }));
-
       setUsers(mappedUsers);
       setError(null);
     } catch (err) {
@@ -3023,6 +3037,8 @@ export default function RBACManagement() {
                                 assignRoleToUser(
                                   userForRoleManagement._id,
                                   role.id,
+                                  userForRoleManagement.projectName,
+                                  userForRoleManagement.projectId,
                                 )
                               }
                               disabled={isAssigningRole}
