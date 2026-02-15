@@ -16,7 +16,8 @@ import {
   Lock,
   CheckCircle,
   XCircle,
-  ChartBar
+  ChartBar,
+  Link
 } from "lucide-react";
 import useApi from "@/services/authservices";
 
@@ -29,6 +30,14 @@ const SERVICES = [
     description: "User authentication and management",
     color: "purple",
     endpoint: "/api/keys/auth-service",
+  },
+  {
+    id: "url-service",
+    name: "Url Shortener Service",
+    icon: Link,
+    description: "Short Long Url into Small",
+    color: "violet",
+    endpoint: "/api/keys/url-service",
   },
   {
     id: "payment-service",
