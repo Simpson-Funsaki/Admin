@@ -1034,8 +1034,6 @@ export default function EnhancedDashboard({ onFeatureSelect }) {
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
-
-
   const isDark = theme === "dark";
 
   const bgGradient = isDark
@@ -1322,7 +1320,7 @@ export default function EnhancedDashboard({ onFeatureSelect }) {
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
                     Service Status
                   </h3>
-                  <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-3">
                     {Object.entries(serviceHealth).map(([id, service]) => (
                       <ServiceStatusCard
                         key={id}

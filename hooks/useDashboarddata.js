@@ -18,6 +18,12 @@ const HEALTH_SERVICES = [
   },
   {
     id: "service3",
+    name: "Link Micro Service",
+    healthUrl: process.env.NEXT_PUBLIC_SERVICE4_HEALTH,
+    type: "MicroService",
+  },
+  {
+    id: "service4",
     name: "ML Backend",
     healthUrl: process.env.NEXT_PUBLIC_SERVICE3_HEALTH,
     type: "FastAPI",
