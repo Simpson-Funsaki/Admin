@@ -1,9 +1,9 @@
 {
   "name": "admin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Admin Desktop App",
   "main": "main.js",
-  "author": "Your Name",
+  "author": "Achinta",
   "scripts": {
     "dev": "cd ADMIN && npm run dev",
     "build": "cd ADMIN && npm run build",
@@ -23,8 +23,8 @@
     "electron-builder": "^26.7.0"
   },
   "build": {
-    "appId": "com.achinta.admin",
-    "productName": "Admin Panel",
+    "appId": "com.achinta.appsy",
+    "productName": "Appsy Admin",
     "directories": {
       "output": "dist"
     },
@@ -45,8 +45,7 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.ico",
-      "publisherName": "Achinta Hazra co"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
