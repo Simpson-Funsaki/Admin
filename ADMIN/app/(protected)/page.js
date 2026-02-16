@@ -24,6 +24,7 @@ export default function HomePage() {
 
   // Handle Admin Login click
   const handleAdminLogin = () => {
+    console.log("api",process.env.NEXT_PUBLIC_SERVER_API_URL)
     if (isAuthenticated) {
       router.push("/admin");
     } else {
