@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   Users,
   Shield,
@@ -48,7 +49,6 @@ export default function RBACManagement() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isTogglingStatus, setIsTogglingStatus] = useState(null);
   const [expandedRows, setExpandedRows] = useState(new Set());
-  const [theme, setTheme] = useState("light");
   const [showFilters, setShowFilters] = useState(false);
   const [showRolesPanel, setShowRolesPanel] = useState(false);
   const [showRoleAssignModal, setShowRoleAssignModal] = useState(false);
@@ -96,20 +96,7 @@ export default function RBACManagement() {
 
   const apiFetch = useApi();
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  const { theme } = useBackgroundContext();
 
   useEffect(() => {
     fetchUsers();
@@ -415,7 +402,11 @@ export default function RBACManagement() {
 
       // If the user details modal is open, refresh that user's data
       if (selectedUser && selectedUser._id === userId) {
-        await fetchUserInfoById(userId);
+        await fetchUserInfoById(
+          userId,
+          selectedUser.projectId,
+          selectedUser.projectName,
+        );
       }
 
       // If role management modal is open, refresh that user's data
@@ -438,50 +429,56 @@ export default function RBACManagement() {
   };
 
   // Remove a role from a user
-  const removeRoleFromUser = async (userId, roleId) => {
-    try {
-      setIsRemovingRole(roleId);
-      const response = await apiFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}/roles/${roleId}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-          },
+const removeRoleFromUser = async (userId, roleId) => {
+  try {
+    setIsRemovingRole(roleId);
+
+    const user = users.find((u) => u._id === userId);
+    const projectId = user?.projectId;
+    const projectName = user?.projectName;
+
+    const response = await apiFetch(
+      `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}/roles/${roleId}?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
         },
+      },
+    );
+
+    if (!response.ok) throw new Error("Failed to remove role from user");
+
+    const result = await response.json();
+    console.log("Role removed successfully:", result);
+
+    await fetchUsers();
+
+    if (selectedUser && selectedUser._id === userId) {
+      await fetchUserInfoById(
+        userId,
+        selectedUser.projectId,
+        selectedUser.projectName,
       );
-
-      if (!response.ok) throw new Error("Failed to remove role from user");
-
-      const result = await response.json();
-      console.log("Role removed successfully:", result);
-
-      // Refresh user data
-      await fetchUsers();
-
-      // If the user details modal is open, refresh that user's data
-      if (selectedUser && selectedUser._id === userId) {
-        await fetchUserInfoById(userId);
-      }
-
-      // If role management modal is open, refresh that user's data
-      if (userForRoleManagement && userForRoleManagement._id === userId) {
-        const updatedUser = users.find((u) => u._id === userId);
-        if (updatedUser) {
-          setUserForRoleManagement(updatedUser);
-        }
-      }
-
-      setError(null);
-      return true;
-    } catch (err) {
-      setError(err.message);
-      console.error("Error removing role:", err);
-      return false;
-    } finally {
-      setIsRemovingRole(null);
     }
-  };
+
+    if (userForRoleManagement && userForRoleManagement._id === userId) {
+      const updatedUser = users.find((u) => u._id === userId);
+      if (updatedUser) {
+        setUserForRoleManagement(updatedUser);
+      }
+    }
+
+    setError(null);
+    return true;
+  } catch (err) {
+    setError(err.message);
+    console.error("Error removing role:", err);
+    return false;
+  } finally {
+    setIsRemovingRole(null);
+  }
+};
 
   const fetchUsers = async () => {
     try {
@@ -507,8 +504,8 @@ export default function RBACManagement() {
         username: profile.username || profile.fullName,
         email: profile.email,
         fullName: profile.fullName,
-projectId: profile.projectId,
-projectName: profile.projectName,
+        projectId: profile.projectId,
+        projectName: profile.projectName,
         // Map all roles as an array
         roles:
           profile.userRoles?.map((userRole) => ({
@@ -576,14 +573,13 @@ projectName: profile.projectName,
     }
   };
 
-  const fetchUserInfoById = async (userId) => {
+  const fetchUserInfoById = async (userId, projectId, projectName) => {
     try {
       const res = await apiFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}`,
+        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}`,
       );
       const data = await res.json();
 
-      // Map the detailed user data
       if (data.success && data.data) {
         const profile = data.data;
         const detailedUser = {
@@ -591,8 +587,8 @@ projectName: profile.projectName,
           username: profile.username || profile.fullName,
           email: profile.email,
           fullName: profile.fullName,
-
-          // Map all roles
+          projectId: projectId,
+          projectName: projectName,
           roles:
             profile.userRoles?.map((userRole) => ({
               id: userRole.role.id,
@@ -614,7 +610,6 @@ projectName: profile.projectName,
                   description: p.description,
                 })) || [],
             })) || [],
-
           role: profile.userRoles?.[0]?.role?.slug || "undefined",
           roleName: profile.userRoles?.[0]?.role?.name || "undefined",
           roleDescription: profile.userRoles?.[0]?.role?.description || "",
@@ -653,73 +648,80 @@ projectName: profile.projectName,
     }
   };
 
-  const deleteUser = async (userId) => {
-    try {
-      setIsDeleting(true);
-      const response = await apiFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}`,
-        {
-          method: "DELETE",
+const deleteUser = async (userId) => {
+  try {
+    setIsDeleting(true);
+
+    const user = users.find((u) => u._id === userId);
+    const projectId = user?.projectId;
+    const projectName = user?.projectName;
+
+    const response = await apiFetch(
+      `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}?projectId=${projectId}&projectName=${encodeURIComponent(projectName)}`,
+      {
+        method: "DELETE",
+      },
+    );
+
+    if (!response.ok) throw new Error("Failed to delete user");
+
+    setUsers(users.filter((u) => u._id !== userId));
+    setShowDeleteConfirm(null);
+    setError(null);
+  } catch (err) {
+    setError(err.message);
+    console.error("Error deleting user:", err);
+  } finally {
+    setIsDeleting(false);
+  }
+};
+
+const toggleUserStatus = async (userId, currentStatus) => {
+  try {
+    setIsTogglingStatus(userId);
+
+    // Get project info from the users array
+    const user = users.find((u) => u._id === userId);
+    const projectId = user?.projectId;
+    const projectName = user?.projectName;
+
+    console.log(`[toggleUserStatus] userId: ${userId} | projectId: ${projectId} | projectName: ${projectName}`);
+
+    const response = await apiFetch(
+      `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}/status`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
-
-      if (!response.ok) throw new Error("Failed to delete user");
-
-      setUsers(users.filter((u) => u._id !== userId));
-      setShowDeleteConfirm(null);
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-      console.error("Error deleting user:", err);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const toggleUserStatus = async (userId, currentStatus) => {
-    try {
-      setIsTogglingStatus(userId);
-      const response = await apiFetch(
-        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/users/${userId}/status`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ isActive: !currentStatus }),
-        },
-      );
-
-      if (!response.ok) throw new Error("Failed to update user status");
-
-      // Update the user in state with new status
-      setUsers(
-        users.map((u) =>
-          u._id === userId
-            ? {
-                ...u,
-                isActive: !currentStatus,
-              }
-            : u,
-        ),
-      );
-
-      // Update selected user if modal is open
-      if (selectedUser && selectedUser._id === userId) {
-        setSelectedUser({
-          ...selectedUser,
+        body: JSON.stringify({
           isActive: !currentStatus,
-        });
-      }
+          projectId: projectId,
+          projectName: projectName,
+        }),
+      },
+    );
 
-      setError(null);
-    } catch (err) {
-      setError(err.message);
-      console.error("Error updating user status:", err);
-    } finally {
-      setIsTogglingStatus(null);
+    if (!response.ok) throw new Error("Failed to update user status");
+
+    setUsers(
+      users.map((u) =>
+        u._id === userId ? { ...u, isActive: !currentStatus } : u,
+      ),
+    );
+
+    if (selectedUser && selectedUser._id === userId) {
+      setSelectedUser({ ...selectedUser, isActive: !currentStatus });
     }
-  };
+
+    setError(null);
+  } catch (err) {
+    setError(err.message);
+    console.error("Error updating user status:", err);
+  } finally {
+    setIsTogglingStatus(null);
+  }
+};
 
   // Open edit role modal
   const openEditRoleModal = (role) => {
@@ -880,9 +882,6 @@ projectName: profile.projectName,
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-indigo-950 to-slate-950"
-    : "from-indigo-50 via-purple-50 to-pink-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-gray-400" : "text-gray-600";
   const textMuted = isDark ? "text-gray-300" : "text-gray-700";
@@ -920,7 +919,7 @@ projectName: profile.projectName,
   if (loading) {
     return (
       <div
-        className={`min-h-screen bg-gradient-to-br ${bgGradient} p-8 transition-colors duration-300`}
+        className={`min-h-screen bg-gradient-to-br p-8 transition-colors duration-300`}
       >
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-500 border-t-transparent"></div>
@@ -930,9 +929,7 @@ projectName: profile.projectName,
   }
 
   return (
-    <div
-      className={`min-h-screen bg-gradient-to-br ${bgGradient} p-8 transition-colors duration-300`}
-    >
+    <div className="min-h-screen p-8 transition-colors duration-300">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
@@ -1330,7 +1327,11 @@ projectName: profile.projectName,
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              fetchUserInfoById(user._id);
+                              fetchUserInfoById(
+                                user._id,
+                                user.projectId,
+                                user.projectName,
+                              );
                             }}
                             className="p-2 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-400 rounded-lg transition-all transform hover:scale-110"
                             title="View Details"

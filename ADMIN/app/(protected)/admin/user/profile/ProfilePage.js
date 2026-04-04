@@ -1,29 +1,16 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect,useMemo } from "react";
+import { backgrounds } from "@/components/ui/bg";
 import { User, Mail, Phone, Calendar, MapPin, Edit, Loader2 } from "lucide-react";
 import Link from "next/link";
 import UserPageLayout from "../../components/useLayout";
 import useUserProfile from "@/hooks/useUserdata";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 
 export default function ProfilePage() {
   const { userProfile, loading, error } = useUserProfile();
-  const [theme, setTheme] = useState("light");
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const { theme } = useBackgroundContext();
 
   const isDark = theme === "dark";
 
@@ -32,7 +19,6 @@ export default function ProfilePage() {
   const errorBg = isDark ? "bg-red-900/20 border-red-500/30" : "bg-red-100 border-red-300";
   const errorTitle = isDark ? "text-red-400" : "text-red-700";
   const errorText = isDark ? "text-gray-400" : "text-gray-600";
-  
   const cardBg = isDark ? "bg-slate-800/50 border-white/10" : "bg-white border-purple-200";
   const headerGradient = isDark 
     ? "from-purple-600 to-pink-600" 

@@ -2,12 +2,15 @@
 import React from "react";
 import AdminPage from "./admin";
 import ProtectedRoute from "../lib/protectedRoute";
+import { BackgroundProvider } from "../context/BackgroundContext";
 
 const Page = () => {
   return (
     <>
       <ProtectedRoute>
-        <AdminPage />
+        <BackgroundProvider rotationInterval={900000}>
+          <AdminPage />
+        </BackgroundProvider>
       </ProtectedRoute>
     </>
   );

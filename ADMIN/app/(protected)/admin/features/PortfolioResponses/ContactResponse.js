@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   Mail,
   User,
@@ -18,23 +19,9 @@ const ContactResponse = () => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [theme, setTheme] = useState("light");
   const apiFetch = useApi();
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const { theme } = useBackgroundContext();
 
   useEffect(() => {
     const getContacts = async () => {
@@ -116,9 +103,6 @@ const ContactResponse = () => {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 via-purple-50 to-pink-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-slate-400" : "text-gray-600";
   const textMuted = isDark ? "text-slate-300" : "text-gray-700";
@@ -148,7 +132,7 @@ const ContactResponse = () => {
   const cancelButton = isDark ? "bg-slate-700 hover:bg-slate-600 text-white" : "bg-gray-200 hover:bg-gray-300 text-gray-800";
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${bgGradient} py-8 px-4 transition-colors duration-300`}>
+    <div className={`min-h-screen bg-gradient-to-br py-8 px-4 transition-colors duration-300`}>
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">

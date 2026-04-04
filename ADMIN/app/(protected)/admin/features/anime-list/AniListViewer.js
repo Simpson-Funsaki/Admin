@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   Search,
   Download,
@@ -22,24 +23,10 @@ export default function AniListViewer() {
   const [exporting, setExporting] = useState(false);
   const [gridSize, setGridSize] = useState(2);
   const [response, setResponse] = useState("");
-  const [theme, setTheme] = useState("light");
   const { accessToken } = useAuth();
   const apiFetch = useApi();
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const { theme } = useBackgroundContext();
 
   const statusLabels = {
     CURRENT: "Watching",
@@ -175,9 +162,6 @@ export default function AniListViewer() {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-900"
-    : "from-blue-50 via-purple-50 to-pink-50";
   const glowColor1 = isDark ? "bg-purple-500/10" : "bg-purple-300/20";
   const glowColor2 = isDark ? "bg-blue-500/10" : "bg-blue-300/20";
   const cardBg = isDark
@@ -211,7 +195,7 @@ export default function AniListViewer() {
   const scoreHighlight = isDark ? "text-purple-400" : "text-purple-600";
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${bgGradient} relative transition-colors duration-300`}>
+    <div className={`min-h-screen bg-gradient-to-br relative transition-colors duration-300`}>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className={`absolute w-96 h-96 ${glowColor1} rounded-full blur-3xl -top-20 -left-20 animate-pulse`}></div>
         <div
@@ -278,16 +262,7 @@ export default function AniListViewer() {
                   </div>
                 </div>
 
-                {error && (
-                  <div className={`p-4 ${errorBg} border rounded-xl transition-colors`}>
-                    {error}
-                  </div>
-                )}
-                {response && (
-                  <div className={`p-4 ${successBg} border rounded-xl transition-colors`}>
-                    {response}
-                  </div>
-                )}
+
               </div>
             </div>
           </div>

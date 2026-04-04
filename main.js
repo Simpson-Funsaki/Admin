@@ -9,15 +9,33 @@ const {
 const { autoUpdater } = require("electron-updater");
 const { startServer, stopServer } = require("./server");
 const { safeStorage } = require("electron");
+const { setupDialogBridge, showCustomDialog } = require("./dialogBridge");
 const fs = require("fs");
 const path = require("path");
+const crypto = require('crypto');
+
+
+// ── NEW: child_process for Ollama PowerShell commands ────────
+const { exec, spawn } = require("child_process");
 
 let mainWindow;
 let isQuitting = false;
 
+// 🔐 Read baked-in read-only download token from package.json
+const pkg = require("./package.json");
+
 // 🔄 Auto-Update Configuration
-autoUpdater.autoDownload = false; // Don't auto-download, ask user first
-autoUpdater.autoInstallOnAppQuit = true; // Install on quit
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// ✅ Correct way to pass token for private GitHub releases
+autoUpdater.setFeedURL({
+  provider: "github",
+  owner: "Achinta005",
+  repo: "appsy",
+  private: true,
+  token: pkg.downloadToken,
+});
 
 // 🎨 Window Configuration
 const WINDOW_CONFIG = {
@@ -29,9 +47,6 @@ const WINDOW_CONFIG = {
   transparent: false,
   backgroundColor: "#0a0a0a",
   hasShadow: true,
-  // DELETE these two lines:
-  // titleBarStyle: "hidden",
-  // titleBarOverlay: { ... },
   webPreferences: {
     nodeIntegration: false,
     contextIsolation: true,
@@ -50,12 +65,6 @@ async function createWindow() {
     await startServer();
 
     mainWindow = new BrowserWindow(WINDOW_CONFIG);
-
-    // Clear session cache to prevent redirect loops
-    await mainWindow.webContents.session.clearCache();
-    await mainWindow.webContents.session.clearStorageData({
-      storages: ["cookies", "localstorage", "sessionstorage"],
-    });
 
     if (process.env.NODE_ENV === "development") {
       const {
@@ -96,6 +105,8 @@ async function createWindow() {
     setupWindowListeners();
     setupGlobalShortcuts();
     setupIPC();
+    setupOllamaIPC(); // ← NEW
+    setupDialogBridge(mainWindow);
 
     setTimeout(() => {
       checkForUpdates();
@@ -106,14 +117,9 @@ async function createWindow() {
   }
 }
 
-// 🔄 Auto-Update Functions
+// 🔄 Check For Updates
 function checkForUpdates() {
-  // Don't check in development
-  if (process.env.NODE_ENV === "development") {
-    console.log("Skipping update check in development mode");
-    return;
-  }
-
+  if (process.env.NODE_ENV === "development") return;
   console.log("🔍 Checking for updates...");
   autoUpdater.checkForUpdates();
 }
@@ -129,30 +135,26 @@ autoUpdater.on("checking-for-update", () => {
   }
 });
 
-autoUpdater.on("update-available", (info) => {
-  console.log("✅ Update available:", info.version);
-
-  const dialogOpts = {
+autoUpdater.on("update-available", async (info) => {
+  const { response } = await showCustomDialog({
     type: "info",
-    buttons: ["Download Update", "Later"],
     title: "Update Available",
-    message: `Version ${info.version} is available!`,
-    detail: "A new version is available. Would you like to download it now?",
-  };
-
-  dialog.showMessageBox(mainWindow, dialogOpts).then((returnValue) => {
-    if (returnValue.response === 0) {
-      // User clicked "Download Update"
-      autoUpdater.downloadUpdate();
-
-      if (mainWindow) {
-        mainWindow.webContents.send("update-status", {
-          status: "downloading",
-          message: "Downloading update...",
-        });
-      }
-    }
+    message: `Version ${info.version} is ready`,
+    detail: "A new version is available. Download it now?",
+    buttons: ["Download Update", "Later"],
+    defaultId: 0,
+    cancelId: 1,
   });
+
+  if (response === 0) {
+    if (mainWindow) {
+      mainWindow.webContents.send("update-status", {
+        status: "downloading",
+        message: "Starting download...",
+      });
+    }
+    autoUpdater.downloadUpdate();
+  }
 });
 
 autoUpdater.on("update-not-available", (info) => {
@@ -170,7 +172,7 @@ autoUpdater.on("error", (err) => {
   if (mainWindow) {
     mainWindow.webContents.send("update-status", {
       status: "error",
-      message: "Update check failed",
+      message: `Update failed: ${err.message}`,
     });
   }
 });
@@ -188,27 +190,24 @@ autoUpdater.on("download-progress", (progressObj) => {
   }
 });
 
-autoUpdater.on("update-downloaded", (info) => {
-  console.log("✅ Update downloaded:", info.version);
-
-  const dialogOpts = {
+autoUpdater.on("update-downloaded", async (info) => {
+  const { response } = await showCustomDialog({
     type: "info",
-    buttons: ["Restart Now", "Later"],
     title: "Update Ready",
     message: "Update downloaded successfully!",
-    detail:
-      "The update has been downloaded. Restart the application to apply the update.",
-  };
-
-  dialog.showMessageBox(mainWindow, dialogOpts).then((returnValue) => {
-    if (returnValue.response === 0) {
-      // User clicked "Restart Now"
-      isQuitting = true;
-      autoUpdater.quitAndInstall();
-    }
+    detail: "Restart the application to apply the update.",
+    buttons: ["Restart Now", "Later"],
+    defaultId: 0,
+    cancelId: 1,
   });
+
+  if (response === 0) {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  }
 });
 
+// 🔐 Credentials
 const CREDS_PATH = path.join(app.getPath("userData"), "credentials.enc");
 
 function saveCredentials(credentials) {
@@ -258,27 +257,6 @@ function setupWindowEffects() {
 
 // 🎯 Window Event Listeners
 function setupWindowListeners() {
-  mainWindow.on("close", (event) => {
-    if (!isQuitting) {
-      event.preventDefault();
-
-      const choice = dialog.showMessageBoxSync(mainWindow, {
-        type: "question",
-        buttons: ["Quit", "Cancel"],
-        title: "Confirm",
-        message: "Are you sure you want to quit?",
-        defaultId: 1,
-        cancelId: 1,
-      });
-
-      if (choice === 0) {
-        isQuitting = true;
-        stopServer();
-        app.quit();
-      }
-    }
-  });
-
   mainWindow.webContents.on("did-navigate", () => {
     mainWindow.webContents.send(
       "can-go-back",
@@ -328,7 +306,6 @@ function setupGlobalShortcuts() {
     }
   });
 
-  // Manual update check shortcut
   globalShortcut.register("CommandOrControl+U", () => {
     checkForUpdates();
   });
@@ -338,6 +315,167 @@ function setupGlobalShortcuts() {
 function showErrorDialog(title, message) {
   dialog.showErrorBox(title, message);
 }
+
+const si = require('systeminformation');
+const { createHash } = require('crypto');
+
+async function getHardwareFingerprint() {
+  const [cpu, disk, uuid, net] = await Promise.all([
+    si.cpu(),
+    si.diskLayout(),
+    si.uuid(),
+    si.networkInterfaces(),
+  ]);
+
+  const raw = JSON.stringify({
+    cpu: cpu.brand + cpu.stepping,
+    disk: disk[0]?.serialNum ?? 'nodisk',
+    uuid: uuid.hardware ?? uuid.os,
+    mac: Array.isArray(net) ? net[0]?.mac : net?.mac ?? 'nomac',
+  });
+
+  return createHash('sha256').update(raw).digest('hex');
+}
+
+ipcMain.handle("biometric-auth", async () => {
+  if (process.platform === "win32") {
+    return new Promise((resolve) => {
+      const os = require("os");
+      const fs = require("fs");
+      const scriptPath = path.join(os.tmpdir(), "bio.ps1");
+
+      const script = `
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$null = [Windows.Security.Credentials.UI.UserConsentVerifier,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
+
+# Must pick the overload where the single parameter is a generic IAsyncOperation<T>, not IAsyncAction
+$asTaskMethod = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and
+    $_.IsGenericMethodDefinition -eq $true -and
+    $_.GetParameters().Count -eq 1
+} | Select-Object -First 1
+
+$resultType = [Windows.Security.Credentials.UI.UserConsentVerificationResult,Windows.Security.Credentials.UI,ContentType=WindowsRuntime]
+$genericMethod = $asTaskMethod.MakeGenericMethod($resultType)
+
+$op = [Windows.Security.Credentials.UI.UserConsentVerifier]::RequestVerificationAsync("Sign in to Appsy")
+$task = $genericMethod.Invoke($null, @($op))
+$task.Wait()
+Write-Output $task.Result.ToString()
+`;
+      fs.writeFileSync(scriptPath, script, "utf8");
+
+      const child = exec(
+        `powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${scriptPath}"`,
+        { timeout: 60000 },
+        (error, stdout, stderr) => {
+          try {
+            fs.unlinkSync(scriptPath);
+          } catch {}
+
+          if (error) {
+            resolve({ success: false, reason: stderr || error.message });
+            return;
+          }
+
+          const result = stdout.trim();
+          if (result === "Verified") resolve({ success: true });
+          else if (result === "Canceled")
+            resolve({ success: false, reason: "Cancelled." });
+          else if (result === "NotConfiguredForUser")
+            resolve({ success: false, reason: "Windows Hello not set up." });
+          else if (result === "DeviceNotPresent")
+            resolve({ success: false, reason: "No biometric device found." });
+          else
+            resolve({
+              success: false,
+              reason: `Result: ${result || "no output"}`,
+            });
+        },
+      );
+    });
+  } else if (process.platform === "darwin") {
+    const { systemPreferences } = require("electron");
+    try {
+      if (!systemPreferences.canPromptTouchID()) {
+        return { success: false, reason: "Touch ID not available." };
+      }
+      await systemPreferences.promptTouchID("Sign in to Appsy");
+      return { success: true };
+    } catch (err) {
+      return { success: false, reason: err.message };
+    }
+  } else {
+    return { success: false, reason: "Biometric auth not supported on Linux" };
+  }
+});
+
+
+async function getEncryptionKey() {
+  const fp = await getHardwareFingerprint();
+  return crypto.createHash('sha256').update(fp).digest(); // 32 bytes for AES-256
+}
+
+// Encrypt credentials to file
+ipcMain.handle('save-biometric-credentials', async (_, { email, password, filePath }) => {
+  try {
+    const key = await getEncryptionKey();
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+    const payload = JSON.stringify({ email, password });
+    const encrypted = Buffer.concat([cipher.update(payload, 'utf8'), cipher.final()]);
+    const fileContent = Buffer.concat([iv, encrypted]);
+
+    // ← this line is critical — creates AppData\Roaming\Appsy\ if it doesn't exist
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    fs.writeFileSync(filePath, fileContent);
+    return { success: true };
+  } catch (err) {
+    return { success: false, reason: err.message };
+  }
+});
+
+// Read and decrypt credentials file
+ipcMain.handle('read-biometric-credentials', async (_, { filePath }) => {
+  try {
+    if (!fs.existsSync(filePath)) {
+      return { success: false, reason: 'Credentials file not found' };
+    }
+
+    const key = await getEncryptionKey();
+    const fileContent = fs.readFileSync(filePath);
+    
+    const iv = fileContent.slice(0, 16);
+    const encrypted = fileContent.slice(16);
+    
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    
+    const { email, password } = JSON.parse(decrypted.toString('utf8'));
+    return { success: true, email, password };
+  } catch (err) {
+    // Wrong machine or corrupted file — decryption fails
+    return { success: false, reason: 'Could not decrypt credentials file' };
+  }
+});
+
+ipcMain.handle('check-file-exists', (_, { filePath }) => {
+  return { exists: fs.existsSync(filePath) };
+});
+
+// Delete credentials file
+ipcMain.handle('delete-biometric-credentials', (_, { filePath }) => {
+  try {
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    return { success: true };
+  } catch (err) {
+    return { success: false, reason: err.message };
+  }
+});
+
+
 
 // 🎯 IPC Handlers
 function setupIPC() {
@@ -359,7 +497,6 @@ function setupIPC() {
   });
   ipcMain.on("navigate-refresh", () => mainWindow.webContents.reload());
 
-  // Manual update check from renderer
   ipcMain.on("check-for-updates", () => {
     checkForUpdates();
   });
@@ -387,6 +524,80 @@ function setupIPC() {
 
   ipcMain.on("clear-credentials", () => {
     clearCredentials();
+  });
+}
+
+// 🤖 Ollama IPC Handlers  ─────────────────────────────────────
+function setupOllamaIPC() {
+  // ── helper: one-shot powershell command ──────────────────────
+  function runPS(command) {
+    return new Promise((resolve, reject) => {
+      exec(
+        `powershell -NoProfile -NonInteractive -Command "${command}"`,
+        { timeout: 30000 },
+        (error, stdout, stderr) => {
+          if (error) reject(stderr || error.message);
+          else resolve(stdout.trim());
+        },
+      );
+    });
+  }
+
+  // ── ollama ps ────────────────────────────────────────────────
+  ipcMain.handle("ollama-ps", async () => {
+    try {
+      const output = await runPS("ollama ps");
+      return { success: true, output };
+    } catch (e) {
+      return { success: false, output: String(e) };
+    }
+  });
+
+  // ── ollama list ──────────────────────────────────────────────
+  ipcMain.handle("ollama-list", async () => {
+    try {
+      const output = await runPS("ollama list");
+      return { success: true, output };
+    } catch (e) {
+      return { success: false, output: String(e) };
+    }
+  });
+
+  // ── ollama run <model>  (warm-up only — loads model into VRAM) ─
+  // IMPORTANT: `ollama run` is an interactive REPL — you cannot
+  // pass a chat prompt through it reliably via spawn/exec.
+  // For actual chat, the renderer uses the Ollama REST API directly
+  // at http://localhost:11434/api/chat (no IPC needed for chat).
+  // This IPC handler is only used to pre-load a model into memory.
+  ipcMain.handle("ollama-run", async (event, { model }) => {
+    return new Promise((resolve) => {
+      // Use `ollama run <model> ""` — sends an empty prompt which
+      // loads the model and exits cleanly without waiting for stdin.
+      const ps = spawn("powershell", [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        // Echo empty string into ollama run so it loads then exits
+        `echo "" | ollama run ${model}`,
+      ]);
+
+      let output = "";
+
+      ps.stdout.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+      ps.stderr.on("data", (chunk) => {
+        output += chunk.toString();
+      });
+
+      ps.on("close", (code) => {
+        resolve({ success: code === 0, output: output.trim() });
+      });
+
+      ps.on("error", (err) => {
+        resolve({ success: false, output: err.message });
+      });
+    });
   });
 }
 

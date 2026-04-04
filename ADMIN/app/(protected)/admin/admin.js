@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getUserFromToken } from "../lib/auth";
 import { useAuth } from "../context/authContext";
 import useApi from "@/services/authservices";
 import useUserProfile from "@/hooks/useUserdata";
 import { useActivityStream } from "@/hooks/useActivityStream";
+import { useBackgroundContext } from "../context/BackgroundContext";
 
-// Components
 import AdminSidebar from "./components/AdminSidebar";
 import AdminHeader from "./components/AdminHeader";
 import AdminFeatureRenderer from "./components/AdminFeatureRenderer";
@@ -20,51 +19,58 @@ const AdminPage = () => {
   const [activeFeature, setActiveFeature] = useState(null);
   const [ipAddress, setIpAddress] = useState("Loading...");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState("light");
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const isResizing = useRef(false);
+
+  // ✅ Single source of truth for theme AND background image
+  const { theme, bgImage } = useBackgroundContext();
+  const isDark = theme === "dark";
 
   const { userProfile } = useUserProfile();
   const { activities, isConnected } = useActivityStream();
 
   const router = useRouter();
-  const {
-    isAuthLoading,
-    accessToken,
-    isAuthenticated,
-    setAccessToken,
-    setIsAuthenticated,
-  } = useAuth();
+  const { isLoading, isAuthenticated, logout } = useAuth();
 
   const apiFetch = useApi();
 
-  // Initialize theme
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    // Listen for theme changes
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
+  // ── Resize handlers ──────────────────────────────────────────────────────────
+  const handleResizeStart = useCallback(() => {
+    isResizing.current = true;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
   }, []);
 
-  // Redirect if authenticated
   useEffect(() => {
-    if (!isAuthLoading && isAuthenticated) {
-      router.replace("/admin");
-    }
-  }, [isAuthenticated, isAuthLoading, router]);
+    const handleResizeMove = (e) => {
+      if (!isResizing.current) return;
+      setSidebarWidth(Math.min(Math.max(e.clientX, 180), 480));
+    };
+    const handleResizeEnd = () => {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    window.addEventListener("mousemove", handleResizeMove);
+    window.addEventListener("mouseup", handleResizeEnd);
+    return () => {
+      window.removeEventListener("mousemove", handleResizeMove);
+      window.removeEventListener("mouseup", handleResizeEnd);
+    };
+  }, []);
 
-  // Initialize admin data
+  // ── Auth redirect ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  // ── Init admin data ──────────────────────────────────────────────────────────
   useEffect(() => {
     const initAdmin = async () => {
       setUser(userProfile);
-
-      // Set default feature based on role
       const defaultFeature = getDefaultFeatureForRole(userProfile.roleSlug);
       setActiveFeature(defaultFeature);
 
@@ -73,97 +79,78 @@ const AdminPage = () => {
           `${process.env.NEXT_PUBLIC_SERVER_API_URL}/get-ip`,
           {
             method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ user_id: userProfile.userId }),
-          },
+          }
         );
         const result = await data.json();
-        if (result && !result.error) {
-          setIpAddress(result.ip || "Not Available");
-        } else {
-          setIpAddress("Not Available");
-        }
-      } catch (error) {
-        console.error("Error fetching IP:", error);
+        setIpAddress(
+          result && !result.error
+            ? result.ip || "Not Available"
+            : "Not Available"
+        );
+      } catch {
         setIpAddress("Currently Not Available!");
       } finally {
         setLoading(false);
       }
     };
 
-    if (userProfile) {
-      initAdmin();
-    }
+    if (userProfile) initAdmin();
   }, [userProfile]);
 
-  // Helper function to get default feature based on role
+  // ── Helpers ──────────────────────────────────────────────────────────────────
   const getDefaultFeatureForRole = (role) => {
-    if (role === "admin") {
-      return "dashboard";
-    }
-
-    // For non-admin roles, find the first available feature
-    const availableFeature = Object.entries(adminFeatures).find(
-      ([_, feature]) => feature.roles.includes(role),
+    if (role === "admin") return "dashboard";
+    const found = Object.entries(adminFeatures).find(([_, f]) =>
+      f.roles.includes(role)
     );
-
-    return availableFeature ? availableFeature[0] : null;
+    return found ? found[0] : null;
   };
 
-  // Logout handler
   const handleLogout = async () => {
     window.electron?.clearCredentials();
-    try {
-      const res = await apiFetch("/api/auth/logout", {
-        method: "POST",
-      });
-
-      if (!res.ok) {
-        throw new Error("Logout failed");
-      }
-
-      setAccessToken(null);
-      setIsAuthenticated(false);
-      router.push("/");
-    } catch (err) {
-      console.error("Logout error:", err);
-    }
+    await logout();
   };
 
-  // Theme-based styles
-  const getThemeStyles = () => {
-    if (theme === "dark") {
-      return {
-        container:
-          "bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950",
-        loading: "bg-gradient-to-br from-slate-950 to-slate-900",
-        spinner: "border-purple-400",
-        text: "text-gray-100",
-      };
-    }
-    return {
-      container: "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50",
-      loading: "bg-gradient-to-br from-blue-100 to-purple-100",
-      spinner: "border-purple-600",
-      text: "text-gray-900",
-    };
-  };
-
-  const styles = getThemeStyles();
-
-  // Loading state
+  // ── Loading state ────────────────────────────────────────────────────────────
   if (loading || !user || !activeFeature) {
     return (
-      <div
-        className={`min-h-screen flex items-center justify-center ${styles.loading}`}
-      >
+      <div className="min-h-screen flex items-center justify-center relative transition-all duration-300">
+        {/* Loading background */}
+        <div
+          className="absolute inset-0 -z-10"
+          style={
+            bgImage
+              ? {
+                  backgroundImage: `url(${bgImage})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundRepeat: "no-repeat",
+                }
+              : undefined
+          }
+        >
+          <div
+            className={`absolute inset-0 ${
+              isDark
+                ? "bg-gradient-to-br from-slate-950/80 to-slate-900/80"
+                : "bg-gradient-to-br from-blue-100/80 to-purple-100/80"
+            }`}
+          />
+        </div>
+
         <div className="text-center">
           <div
-            className={`animate-spin rounded-full h-12 w-12 border-b-2 ${styles.spinner} mx-auto mb-4`}
-          ></div>
-          <p className={`${styles.text} text-lg font-medium`}>
+            className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${
+              isDark ? "border-purple-400" : "border-purple-600"
+            }`}
+          />
+          <p
+            className={`text-lg font-medium ${
+              isDark ? "text-gray-100" : "text-gray-900"
+            }`}
+          >
             Loading Admin Panel...
           </p>
         </div>
@@ -172,10 +159,35 @@ const AdminPage = () => {
   }
 
   return (
-    <div
-      className={`flex h-screen ${styles.container} overflow-hidden transition-colors duration-300`}
-    >
-      {/* Sidebar */}
+    <div className="flex h-screen overflow-hidden relative">
+      <div
+        className="fixed inset-0 -z-10 transition-all duration-500"
+        style={
+          bgImage
+            ? {
+                backgroundImage: `url(${bgImage})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundRepeat: "no-repeat",
+              }
+            : undefined
+        }
+      >
+        {/* Overlay — tint over image OR fallback gradient when no image */}
+        <div
+          className={`absolute inset-0 transition-colors duration-300 ${
+            bgImage
+              ? isDark
+                ? "bg-black/40"
+                : "bg-white/20"
+              : isDark
+              ? "bg-gradient-to-br from-slate-950 via-purple-950 to-slate-950"
+              : "bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50"
+          }`}
+        />
+      </div>
+
+      {/* Sidebar — transparent, blurs against fixed bg */}
       <AdminSidebar
         activeFeature={activeFeature}
         onFeatureSelect={setActiveFeature}
@@ -183,11 +195,14 @@ const AdminPage = () => {
         isCollapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         theme={theme}
+        width={sidebarWidth}
+        onResizeStart={handleResizeStart}
       />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+        {/* Header — transparent, blurs against fixed bg */}
         <AdminHeader
           user={user}
           ipAddress={ipAddress}
@@ -196,20 +211,18 @@ const AdminPage = () => {
           activities={activities}
           isConnected={isConnected}
           userProfile={userProfile}
+          theme={theme}
         />
 
-        {/* Content */}
+        {/* Feature content */}
         <main className="flex-1 overflow-auto">
           <AdminFeatureRenderer
             featureKey={activeFeature}
-            onBack={() => {
-              // Go back to default feature for the user's role
-              const defaultFeature = getDefaultFeatureForRole(user.roleSlug);
-              setActiveFeature(defaultFeature);
-            }}
+            onBack={() =>
+              setActiveFeature(getDefaultFeatureForRole(user.roleSlug))
+            }
             userRole={user.roleSlug}
             onFeatureSelect={setActiveFeature}
-            theme={theme}
           />
         </main>
       </div>

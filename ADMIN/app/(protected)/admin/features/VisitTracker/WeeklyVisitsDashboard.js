@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   BarChart,
   Bar,
@@ -34,27 +35,16 @@ export default function WeeklyVisitsDashboard() {
   const [viewType, setViewType] = useState("bar");
   const [weeksToShow, setWeeksToShow] = useState("all");
   const [expandedWeeks, setExpandedWeeks] = useState(new Set());
-  const [theme, setTheme] = useState("light");
-  const {accessToken} = useAuth();
+  const { accessToken } = useAuth();
   const apiFetch = useApi();
 
   const API_BASE = process.env.NEXT_PUBLIC_SERVER_API_URL;
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
-
+  const { theme } = useBackgroundContext();
+  const parseWeekKey = (weekKey) => {
+    const [year, week] = weekKey.split("-W");
+    return parseInt(year) * 100 + parseInt(week);
+  };
   useEffect(() => {
     fetchAllData();
   }, []);
@@ -86,7 +76,7 @@ export default function WeeklyVisitsDashboard() {
       const statsData = await statsRes.json();
       const currentWeekData = await currentWeekRes.json();
 
-      setVisits(visitsData);
+      setVisits([...visitsData].sort((a, b) => parseWeekKey(a.week) - parseWeekKey(b.week)));
       setStats(statsData);
       setCurrentWeek(currentWeekData);
     } catch (err) {
@@ -138,7 +128,7 @@ export default function WeeklyVisitsDashboard() {
       const response = await apiFetch(`${API_BASE}/track/visits`);
       if (!response.ok) throw new Error("Failed to fetch visits");
       const data = await response.json();
-      setVisits(data);
+      setVisits([...data].sort((a, b) => parseWeekKey(a.week) - parseWeekKey(b.week)));
     } catch (err) {
       console.error("Error fetching visits:", err);
     }
@@ -146,10 +136,12 @@ export default function WeeklyVisitsDashboard() {
 
   const fetchRecentWeeks = async (weeks) => {
     try {
-      const response = await apiFetch(`${API_BASE}/track/visits/recent/${weeks}`);
+      const response = await apiFetch(
+        `${API_BASE}/track/visits/recent/${weeks}`,
+      );
       if (!response.ok) throw new Error("Failed to fetch recent weeks");
       const data = await response.json();
-      setVisits(data);
+      setVisits([...data].sort((a, b) => parseWeekKey(a.week) - parseWeekKey(b.week)));
     } catch (err) {
       console.error("Error fetching recent weeks:", err);
     }
@@ -174,23 +166,34 @@ export default function WeeklyVisitsDashboard() {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 via-purple-50 to-pink-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-slate-400" : "text-gray-600";
   const textMuted = isDark ? "text-slate-300" : "text-gray-700";
-  const cardBg = isDark ? "bg-slate-800/50 border-slate-700" : "bg-white border-purple-200";
-  const buttonBg = isDark ? "bg-slate-700 hover:bg-slate-600" : "bg-purple-100 hover:bg-purple-200";
+  const cardBg = isDark
+    ? "bg-slate-800/50 border-slate-700"
+    : "bg-white border-purple-200";
+  const buttonBg = isDark
+    ? "bg-slate-700 hover:bg-slate-600"
+    : "bg-purple-100 hover:bg-purple-200";
   const buttonText = isDark ? "text-white" : "text-purple-900";
-  const selectBg = isDark ? "bg-slate-700 text-slate-300 border-slate-600 focus:border-purple-500" : "bg-white text-gray-900 border-purple-300 focus:border-purple-400";
-  const viewButtonActive = isDark ? "bg-purple-600 text-white" : "bg-purple-500 text-white";
-  const viewButtonInactive = isDark ? "bg-slate-700 text-slate-300 hover:bg-slate-600" : "bg-purple-100 text-purple-900 hover:bg-purple-200";
+  const selectBg = isDark
+    ? "bg-slate-700 text-slate-300 border-slate-600 focus:border-purple-500"
+    : "bg-white text-gray-900 border-purple-300 focus:border-purple-400";
+  const viewButtonActive = isDark
+    ? "bg-purple-600 text-white"
+    : "bg-purple-500 text-white";
+  const viewButtonInactive = isDark
+    ? "bg-slate-700 text-slate-300 hover:bg-slate-600"
+    : "bg-purple-100 text-purple-900 hover:bg-purple-200";
   const tableBorder = isDark ? "border-slate-700" : "border-purple-200";
   const tableHover = isDark ? "hover:bg-slate-700/30" : "hover:bg-purple-50";
   const expandedRowBg = isDark ? "bg-slate-900/50" : "bg-purple-50/50";
-  const ipBadgeBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-purple-200";
-  const errorBg = isDark ? "bg-yellow-900/30 border-yellow-500/50 text-yellow-200" : "bg-yellow-50 border-yellow-300 text-yellow-800";
+  const ipBadgeBg = isDark
+    ? "bg-slate-800 border-slate-700"
+    : "bg-white border-purple-200";
+  const errorBg = isDark
+    ? "bg-yellow-900/30 border-yellow-500/50 text-yellow-200"
+    : "bg-yellow-50 border-yellow-300 text-yellow-800";
   const errorTextSub = isDark ? "text-yellow-300/70" : "text-yellow-700";
   const loadingSpinner = isDark ? "border-purple-500" : "border-purple-600";
   const chartGrid = isDark ? "#334155" : "#e2e8f0";
@@ -204,9 +207,13 @@ export default function WeeklyVisitsDashboard() {
 
   if (loading) {
     return (
-      <div className={`flex items-center justify-center min-h-screen bg-gradient-to-br ${bgGradient} transition-colors duration-300`}>
+      <div
+        className={`flex items-center justify-center min-h-screen bg-gradient-to-br transition-colors duration-300`}
+      >
         <div className="text-center">
-          <div className={`animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 ${loadingSpinner} mx-auto mb-4`}></div>
+          <div
+            className={`animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 ${loadingSpinner} mx-auto mb-4`}
+          ></div>
           <p className={`${textMuted} text-lg`}>Loading visits data...</p>
         </div>
       </div>
@@ -214,12 +221,18 @@ export default function WeeklyVisitsDashboard() {
   }
 
   return (
-    <div className={`w-full min-h-screen bg-gradient-to-br ${bgGradient} p-6 transition-colors duration-300`}>
+    <div
+      className={`w-full min-h-screen bg-gradient-to-br p-6 transition-colors duration-300`}
+    >
       <div className="max-w-7xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-2">
-            <h1 className={`text-3xl sm:text-4xl font-bold ${textPrimary} flex items-center gap-3`}>
-              <Calendar className={`w-8 h-8 sm:w-10 sm:h-10 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+            <h1
+              className={`text-3xl sm:text-4xl font-bold ${textPrimary} flex items-center gap-3`}
+            >
+              <Calendar
+                className={`w-8 h-8 sm:w-10 sm:h-10 ${isDark ? "text-purple-400" : "text-purple-500"}`}
+              />
               Weekly Visits Analytics
             </h1>
             <button
@@ -236,7 +249,9 @@ export default function WeeklyVisitsDashboard() {
         </div>
 
         {error && (
-          <div className={`mb-6 p-4 ${errorBg} border rounded-lg transition-colors`}>
+          <div
+            className={`mb-6 p-4 ${errorBg} border rounded-lg transition-colors`}
+          >
             <p className="font-medium">
               Using demo data (API endpoint not configured)
             </p>
@@ -247,10 +262,16 @@ export default function WeeklyVisitsDashboard() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
-          <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+          <div
+            className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <p className={`${textSecondary} text-sm font-medium`}>Total Visits</p>
-              <Users className={`w-5 h-5 ${isDark ? 'text-blue-400' : 'text-blue-500'}`} />
+              <p className={`${textSecondary} text-sm font-medium`}>
+                Total Visits
+              </p>
+              <Users
+                className={`w-5 h-5 ${isDark ? "text-blue-400" : "text-blue-500"}`}
+              />
             </div>
             <p className={`text-3xl font-bold ${textPrimary}`}>
               {stats?.totalVisits?.toLocaleString() || 0}
@@ -260,9 +281,13 @@ export default function WeeklyVisitsDashboard() {
             </p>
           </div>
 
-          <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+          <div
+            className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <p className={`${textSecondary} text-sm font-medium`}>Unique IPs</p>
+              <p className={`${textSecondary} text-sm font-medium`}>
+                Unique IPs
+              </p>
               <Globe className="w-5 h-5 text-emerald-400" />
             </div>
             <p className={`text-3xl font-bold ${textPrimary}`}>
@@ -273,10 +298,16 @@ export default function WeeklyVisitsDashboard() {
             </p>
           </div>
 
-          <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+          <div
+            className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <p className={`${textSecondary} text-sm font-medium`}>Avg per Week</p>
-              <Activity className={`w-5 h-5 ${isDark ? 'text-purple-400' : 'text-purple-500'}`} />
+              <p className={`${textSecondary} text-sm font-medium`}>
+                Avg per Week
+              </p>
+              <Activity
+                className={`w-5 h-5 ${isDark ? "text-purple-400" : "text-purple-500"}`}
+              />
             </div>
             <p className={`text-3xl font-bold ${textPrimary}`}>
               {stats?.averagePerWeek?.toLocaleString() || 0}
@@ -286,7 +317,9 @@ export default function WeeklyVisitsDashboard() {
             </p>
           </div>
 
-          <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+          <div
+            className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+          >
             <div className="flex items-center justify-between mb-2">
               <p className={`${textSecondary} text-sm font-medium`}>Trend</p>
               {stats?.trend >= 0 ? (
@@ -306,9 +339,13 @@ export default function WeeklyVisitsDashboard() {
             <p className={`${textSecondary} text-xs mt-1`}>Week-over-week</p>
           </div>
 
-          <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+          <div
+            className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+          >
             <div className="flex items-center justify-between mb-2">
-              <p className={`${textSecondary} text-sm font-medium`}>This Week</p>
+              <p className={`${textSecondary} text-sm font-medium`}>
+                This Week
+              </p>
               <Calendar className="w-5 h-5 text-cyan-400" />
             </div>
             <p className={`text-3xl font-bold ${textPrimary}`}>
@@ -322,15 +359,23 @@ export default function WeeklyVisitsDashboard() {
 
         {stats?.highestWeek && stats?.lowestWeek && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            <div className={`${isDark ? 'bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-700/50' : 'bg-gradient-to-br from-green-50 to-green-100 border-green-300'} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+            <div
+              className={`${isDark ? "bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-700/50" : "bg-gradient-to-br from-green-50 to-green-100 border-green-300"} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+            >
               <div className="flex items-center gap-3 mb-3">
-                <Award className={`w-6 h-6 ${isDark ? 'text-green-400' : 'text-green-600'}`} />
-                <h3 className={`text-lg font-semibold ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                <Award
+                  className={`w-6 h-6 ${isDark ? "text-green-400" : "text-green-600"}`}
+                />
+                <h3
+                  className={`text-lg font-semibold ${isDark ? "text-green-300" : "text-green-700"}`}
+                >
                   Best Week
                 </h3>
               </div>
               <div className="flex items-baseline gap-2">
-                <p className={`text-4xl font-bold ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                <p
+                  className={`text-4xl font-bold ${isDark ? "text-green-400" : "text-green-600"}`}
+                >
                   {stats.highestWeek.visits.toLocaleString()}
                 </p>
                 <p className={textSecondary}>visits</p>
@@ -341,15 +386,23 @@ export default function WeeklyVisitsDashboard() {
               </p>
             </div>
 
-            <div className={`${isDark ? 'bg-gradient-to-br from-orange-900/20 to-orange-800/10 border-orange-700/50' : 'bg-gradient-to-br from-orange-50 to-orange-100 border-orange-300'} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+            <div
+              className={`${isDark ? "bg-gradient-to-br from-orange-900/20 to-orange-800/10 border-orange-700/50" : "bg-gradient-to-br from-orange-50 to-orange-100 border-orange-300"} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+            >
               <div className="flex items-center gap-3 mb-3">
-                <TrendingDown className={`w-6 h-6 ${isDark ? 'text-orange-400' : 'text-orange-600'}`} />
-                <h3 className={`text-lg font-semibold ${isDark ? 'text-orange-300' : 'text-orange-700'}`}>
+                <TrendingDown
+                  className={`w-6 h-6 ${isDark ? "text-orange-400" : "text-orange-600"}`}
+                />
+                <h3
+                  className={`text-lg font-semibold ${isDark ? "text-orange-300" : "text-orange-700"}`}
+                >
                   Lowest Week
                 </h3>
               </div>
               <div className="flex items-baseline gap-2">
-                <p className={`text-4xl font-bold ${isDark ? 'text-orange-400' : 'text-orange-600'}`}>
+                <p
+                  className={`text-4xl font-bold ${isDark ? "text-orange-400" : "text-orange-600"}`}
+                >
                   {stats.lowestWeek.visits.toLocaleString()}
                 </p>
                 <p className={textSecondary}>visits</p>
@@ -362,7 +415,9 @@ export default function WeeklyVisitsDashboard() {
           </div>
         )}
 
-        <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl mb-6 transition-colors`}>
+        <div
+          className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl mb-6 transition-colors`}
+        >
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
             <h2 className={`text-xl font-semibold ${textPrimary}`}>
               Visits Timeline
@@ -465,13 +520,17 @@ export default function WeeklyVisitsDashboard() {
               )}
             </ResponsiveContainer>
           ) : (
-            <div className={`h-96 flex items-center justify-center ${emptyText}`}>
+            <div
+              className={`h-96 flex items-center justify-center ${emptyText}`}
+            >
               No data available
             </div>
           )}
         </div>
 
-        <div className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}>
+        <div
+          className={`${cardBg} backdrop-blur-sm border rounded-xl p-6 shadow-xl transition-colors`}
+        >
           <h2 className={`text-xl font-semibold ${textPrimary} mb-4`}>
             Detailed Breakdown
           </h2>
@@ -479,19 +538,29 @@ export default function WeeklyVisitsDashboard() {
             <table className="w-full">
               <thead>
                 <tr className={`border-b ${tableBorder}`}>
-                  <th className={`text-left py-3 px-4 ${textMuted} font-medium`}>
+                  <th
+                    className={`text-left py-3 px-4 ${textMuted} font-medium`}
+                  >
                     Week
                   </th>
-                  <th className={`text-right py-3 px-4 ${textMuted} font-medium`}>
+                  <th
+                    className={`text-right py-3 px-4 ${textMuted} font-medium`}
+                  >
                     Visits
                   </th>
-                  <th className={`text-right py-3 px-4 ${textMuted} font-medium`}>
+                  <th
+                    className={`text-right py-3 px-4 ${textMuted} font-medium`}
+                  >
                     Unique IPs
                   </th>
-                  <th className={`text-right py-3 px-4 ${textMuted} font-medium`}>
+                  <th
+                    className={`text-right py-3 px-4 ${textMuted} font-medium`}
+                  >
                     Change
                   </th>
-                  <th className={`text-right py-3 px-4 ${textMuted} font-medium`}>
+                  <th
+                    className={`text-right py-3 px-4 ${textMuted} font-medium`}
+                  >
                     Actions
                   </th>
                 </tr>
@@ -508,11 +577,15 @@ export default function WeeklyVisitsDashboard() {
 
                   return (
                     <React.Fragment key={item.week}>
-                      <tr className={`border-b ${tableBorder} ${tableHover} transition-colors`}>
+                      <tr
+                        className={`border-b ${tableBorder} ${tableHover} transition-colors`}
+                      >
                         <td className={`py-3 px-4 ${textPrimary} font-medium`}>
                           {formatWeekLabel(item.week)}
                         </td>
-                        <td className={`py-3 px-4 text-right ${isDark ? 'text-blue-400' : 'text-blue-600'} font-semibold`}>
+                        <td
+                          className={`py-3 px-4 text-right ${isDark ? "text-blue-400" : "text-blue-600"} font-semibold`}
+                        >
                           {item.visits.toLocaleString()}
                         </td>
                         <td className="py-3 px-4 text-right text-emerald-400 font-semibold">
@@ -557,7 +630,9 @@ export default function WeeklyVisitsDashboard() {
                         <tr className={expandedRowBg}>
                           <td colSpan={5} className="py-4 px-4">
                             <div className="pl-4">
-                              <p className={`${textSecondary} text-sm font-medium mb-2 flex items-center gap-2`}>
+                              <p
+                                className={`${textSecondary} text-sm font-medium mb-2 flex items-center gap-2`}
+                              >
                                 <Globe className="w-4 h-4" />
                                 IP Addresses ({ipAddresses.length})
                               </p>

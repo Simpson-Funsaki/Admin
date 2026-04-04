@@ -1,300 +1,268 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import useApi from "@/services/authservices";
 
-/**
- * Custom hook for fetching and managing user profile data
- * @param {Object} options - Configuration options
- * @param {boolean} options.fetchOnMount - Whether to fetch data on component mount (default: true)
- * @param {boolean} options.includeImage - Whether to fetch profile image (default: true)
- * @returns {Object} Profile data and loading states
- */
+const DEFAULT_AVATAR =
+  "https://res.cloudinary.com/dc1fkirb4/image/upload/v1756140468/cropped_circle_image_dhaq8x.png";
+
 export default function useUserProfile(options = {}) {
   const { fetchOnMount = true, includeImage = true } = options;
 
-  const [userProfile, setUserProfile] = useState(null);
+  const [userProfile, setUserProfile]   = useState(null);
   const [profileImage, setProfileImage] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const apiFetch = useApi();
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
 
-  // Fetch profile image
-  const fetchProfileImage = (profilePic) => {
-    try {
-      if (profilePic) {
-        setProfileImage(profilePic);
-      } else {
-        setProfileImage(
-          "https://res.cloudinary.com/dc1fkirb4/image/upload/v1756140468/cropped_circle_image_dhaq8x.png",
-        );
-      }
-    } catch (err) {
-      console.error("Failed to fetch profile picture:", err);
-      setProfileImage(
-        "https://res.cloudinary.com/dc1fkirb4/image/upload/v1756140468/cropped_circle_image_dhaq8x.png",
-      );
-    }
+  const apiFetch   = useApi();
+  const hasFetched = useRef(false);     // blocks StrictMode double-fire
+  const isMounted  = useRef(true);      // blocks setState after unmount
+
+  useEffect(() => {
+    isMounted.current = true;
+    return () => { isMounted.current = false; };
+  }, []);
+
+  // ─── helpers ──────────────────────────────────────────────────────────────
+  const resolveImage = (avatarUrl) =>
+    avatarUrl || DEFAULT_AVATAR;
+
+  const normalizeProfile = (userData, preferences) => {
+    const hasAdminRole = userData.userRoles?.some(
+      (ur) => ur.role?.slug === "admin",
+    );
+    const roleSlug = hasAdminRole
+      ? "admin"
+      : (userData.userRoles?.[0]?.role?.slug ?? "user");
+    const roleName = hasAdminRole
+      ? "Admin"
+      : (userData.userRoles?.[0]?.role?.name ?? "User");
+
+    return {
+      username:          userData.fullName?.trim().split(/\s+/)[0] || "",
+      userId:            userData.id,
+      fullName:          userData.fullName || userData.username || "",
+      email:             userData.email || "",
+      phone:             userData.phoneNumber,
+      location:          userData.location,
+      bio:               userData.bio,
+      joinedDate:        userData.createdAt
+        ? new Date(userData.createdAt).toLocaleDateString("en-US", {
+            month: "long", year: "numeric",
+          })
+        : "Unknown",
+      lastLogin:         userData.lastLoginAt
+        ? new Date(userData.lastLoginAt).toLocaleDateString()
+        : "Unknown",
+      role:              roleName,
+      roleSlug,
+      avatar:            userData.avatarUrl || "",
+      theme:             preferences.theme,
+      language:          preferences.language,
+      notifications:     preferences.pushNotifications,
+      emailAlerts:       preferences.emailNotifications,
+      profileVisibility: preferences.visibility,
+    };
   };
 
-  // Fetch user profile data
-  const fetchUserProfile = async () => {
+  const normalizeUpdatedProfile = (raw) => ({
+    id:        raw.id,
+    email:     raw.email,
+    username:  raw.username,
+    fullName:  raw.fullName,
+    phone:     raw.phoneNumber,
+    bio:       raw.bio,
+    location:  raw.location,
+    avatar:    raw.avatarUrl,
+    role:      raw.userRoles?.[0]?.role?.slug,
+    isActive:  raw.isActive,
+    lastLogin: raw.lastLoginAt,
+  });
+
+  const normalizeSettings = (raw) => ({
+    language:          raw.language,
+    theme:             raw.theme,
+    notifications:     raw.pushNotifications,
+    emailAlerts:       raw.emailNotifications,
+    profileVisibility: raw.visibility,
+  });
+
+  // ─── fetch ────────────────────────────────────────────────────────────────
+  const fetchUserProfile = useCallback(async () => {
+    if (!isMounted.current) return;
+
     try {
       setLoading(true);
       setError(null);
 
       const [profileRes, settingsRes] = await Promise.all([
-        apiFetch(`${process.env.NEXT_PUBLIC_SERVER_API_URL}/profile`, {
-          method: "GET",
-        }),
-        apiFetch(`${process.env.NEXT_PUBLIC_SERVER_API_URL}/preferences`, {
-          method: "GET",
-        }),
+        apiFetch(`${process.env.NEXT_PUBLIC_SERVER_API_URL}/profile`),
+        apiFetch(`${process.env.NEXT_PUBLIC_SERVER_API_URL}/preferences`),
       ]);
 
       if (!profileRes.ok || !settingsRes.ok) {
         throw new Error("Failed to fetch user data");
       }
 
-      // Parse responses
-      const profileJson = await profileRes.json();
+      const profileJson     = await profileRes.json();
       const preferencesJson = await settingsRes.json();
 
-      // IMPORTANT: actual user object is inside `data`
-      const userData = profileJson.data;
+      const userData    = profileJson.data;
       const preferences = preferencesJson.data;
 
-      if (!userData) {
-        throw new Error("Invalid profile response structure");
+      if (!userData)    throw new Error("Invalid profile response structure");
+      if (!preferences) throw new Error("Invalid preferences response structure");
+
+      const mapped = normalizeProfile(userData, preferences);
+
+      if (!isMounted.current) return;
+
+      setUserProfile(mapped);
+
+      if (includeImage) {
+        setProfileImage(resolveImage(mapped.avatar));
       }
 
-      if (!preferences) {
-        throw new Error("Invalid preferences response structure");
-      }
-
-      // Role (slug + name) - Check if admin role exists in roles array
-      const hasAdminRole = userData.userRoles?.some(
-        (userRole) => userRole.role?.slug === "admin",
-      );
-
-      const roleSlug = hasAdminRole
-        ? "admin"
-        : (userData.userRoles?.[0]?.role?.slug ?? "user");
-
-      const roleName = hasAdminRole
-        ? "Admin"
-        : (userData.userRoles?.[0]?.role?.name ?? "User");
-
-      // Map server response to profile state
-      const mappedProfile = {
-        username: userData.fullName?.trim().split(/\s+/)[0] || "",
-        userId: userData.id,
-        fullName: userData.fullName || userData.username || "",
-        email: userData.email || "",
-        phone: userData.phoneNumber,
-        location: userData.location,
-        bio: userData.bio,
-
-        joinedDate: userData.createdAt
-          ? new Date(userData.createdAt).toLocaleDateString("en-US", {
-              month: "long",
-              year: "numeric",
-            })
-          : "Unknown",
-
-        lastLogin: userData.lastLoginAt
-          ? new Date(userData.lastLoginAt).toLocaleDateString()
-          : "Unknown",
-
-        role: roleName,
-        roleSlug,
-
-        avatar: userData.avatarUrl || "",
-
-        // Preferences (from preferences API, not profile)
-        theme: preferences.theme,
-        language: preferences.language,
-        notifications: preferences.pushNotifications,
-        emailAlerts: preferences.emailNotifications,
-        profileVisibility: preferences.visibility,
-      };
-      setUserProfile(mappedProfile);
-
-      if (includeImage && mappedProfile.avatar) {
-        await fetchProfileImage(mappedProfile.avatar);
-      }
-
-      return mappedProfile;
+      return mapped;
     } catch (err) {
-      console.error("Failed to fetch profile:", err);
-      setError(err.message || "Something went wrong");
+      console.error("[useUserProfile] fetch failed:", err);
+      if (isMounted.current) setError(err.message || "Something went wrong");
       throw err;
     } finally {
-      setLoading(false);
+      if (isMounted.current) setLoading(false);
     }
-  };
+  // apiFetch ref is stable from useCallback in context — safe to include
+  }, [apiFetch, includeImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const normalizeProfile = (profile) => ({
-    id: profile.id,
-    email: profile.email,
-    username: profile.username,
-    fullName: profile.fullName,
-    phone: profile.phoneNumber,
-    bio: profile.bio,
-    location: profile.location,
-    avatar: profile.avatarUrl,
-    role: profile.userRoles?.[0]?.role?.slug,
-    isActive: profile.isActive,
-    lastLogin: profile.lastLoginAt,
-  });
-
-  const normalizeSettings = (settings) => ({
-    language: settings.language,
-    theme: settings.theme,
-    notifications: settings.pushNotifications,
-    emailAlerts: settings.emailNotifications,
-    profileVisibility: settings.visibility,
-  });
-
-  // Update user profile
-  const updateUserProfile = async (updates) => {
+  // ─── update profile + preferences ─────────────────────────────────────────
+  const updateUserProfile = useCallback(async (updates) => {
     try {
-      let profileData = null;
-      let settingsData = null;
+      const hasProfileChange = !!(
+        updates?.username  ||
+        updates?.fullName  ||
+        updates?.email     ||
+        updates?.phone     ||
+        updates?.location  ||
+        updates?.bio
+      );
 
-      const hasProfileChange =
-        updates?.username ||
-        updates?.fullName ||
-        updates?.email ||
-        updates?.phone ||
-        updates?.location ||
-        updates?.bio;
-
-      const hasPreferenceChange =
-        updates?.NewTheme ||
-        updates?.profileVisibility ||
+      const hasPreferenceChange = !!(
+        updates?.NewTheme              ||
+        updates?.profileVisibility     ||
         updates?.notifications !== undefined ||
-        updates?.emailAlerts !== undefined;
+        updates?.emailAlerts   !== undefined
+      );
+
+      const requests = [];
 
       if (hasProfileChange) {
-        const res = await apiFetch(
-          `${process.env.NEXT_PUBLIC_SERVER_API_URL}/profile/update`,
-          {
-            method: "PATCH",
+        requests.push(
+          apiFetch(`${process.env.NEXT_PUBLIC_SERVER_API_URL}/profile/update`, {
+            method:  "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              username: updates.username,
-              email: updates.email,
-              fullName: updates.fullName,
-              bio: updates.bio,
+              username:    updates.username,
+              email:       updates.email,
+              fullName:    updates.fullName,
+              bio:         updates.bio,
               phoneNumber: updates.phone,
-              location: updates.location,
+              location:    updates.location,
             }),
-          },
+          }),
         );
-
-        if (!res.ok) throw new Error("Profile update failed");
-
-        const json = await res.json();
-        profileData = normalizeProfile(json.data);
       }
 
       if (hasPreferenceChange) {
-        const res = await apiFetch(
-          `${process.env.NEXT_PUBLIC_SERVER_API_URL}/setting/update`,
-          {
-            method: "PATCH",
+        requests.push(
+          apiFetch(`${process.env.NEXT_PUBLIC_SERVER_API_URL}/setting/update`, {
+            method:  "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              theme: updates.NewTheme,
-              visibility: updates.profileVisibility,
-              pushNotifications: updates.notifications,
+              theme:              updates.NewTheme,
+              visibility:         updates.profileVisibility,
+              pushNotifications:  updates.notifications,
               emailNotifications: updates.emailAlerts,
             }),
-          },
+          }),
         );
-
-        if (!res.ok) throw new Error("Preferences update failed");
-
-        const json = await res.json();
-        settingsData = normalizeSettings(json.data);
       }
 
-      if (!profileData && !settingsData) {
-        console.warn("No changes detected");
+      if (!requests.length) {
+        console.warn("[useUserProfile] updateUserProfile: no changes detected");
         return userProfile;
       }
 
-      const mergedProfile = {
-        ...userProfile,
-        ...profileData,
-        ...settingsData,
-      };
+      const results = await Promise.all(requests);
 
-      setUserProfile(mergedProfile);
-      return mergedProfile;
+      if (results.some((r) => !r.ok)) {
+        throw new Error("One or more updates failed");
+      }
+
+      const jsons = await Promise.all(results.map((r) => r.json()));
+
+      let profileData  = null;
+      let settingsData = null;
+      let idx = 0;
+
+      if (hasProfileChange)    profileData  = normalizeUpdatedProfile(jsons[idx++].data);
+      if (hasPreferenceChange) settingsData = normalizeSettings(jsons[idx].data);
+
+      const merged = { ...userProfile, ...profileData, ...settingsData };
+
+      if (isMounted.current) setUserProfile(merged);
+      return merged;
     } catch (err) {
-      console.error("Update failed:", err.message);
+      console.error("[useUserProfile] update failed:", err.message);
       throw err;
     }
-  };
+  }, [apiFetch, userProfile]);
 
-  // Update profile image
-  const updateProfileImage = async (imageBlob) => {
+  // ─── update image ─────────────────────────────────────────────────────────
+  const updateProfileImage = useCallback(async (imageBlob) => {
     try {
       const formData = new FormData();
       formData.append("profilePic", imageBlob, "profile.jpg");
 
       const res = await apiFetch(
         `${process.env.NEXT_PUBLIC_SERVER_API_URL}/setting/image/update`,
-        {
-          method: "POST",
-          body: formData,
-        },
+        { method: "POST", body: formData },
       );
 
+      if (!res.ok) throw new Error("Image upload failed");
+
       const data = await res.json();
+      const imageUrl = data?.imageUrl ?? data?.data?.imageUrl ?? null;
 
-      if (data.imageUrl) {
-        setProfileImage(data.imageUrl);
-
-        // Update avatar in profile state
-        if (userProfile) {
-          setUserProfile({ ...userProfile, avatar: data.imageUrl });
-        }
+      if (imageUrl && isMounted.current) {
+        setProfileImage(imageUrl);
+        setUserProfile((prev) => prev ? { ...prev, avatar: imageUrl } : prev);
       }
 
-      return data.imageUrl;
+      return imageUrl;
     } catch (err) {
-      console.error("Error uploading image:", err);
+      console.error("[useUserProfile] image upload failed:", err);
       throw err;
     }
-  };
+  }, [apiFetch]);
 
-  // Refresh profile data
-  const refreshProfile = async () => {
-    return await fetchUserProfile();
-  };
-
-  // Auto-fetch on mount
+  // ─── mount effect — fires exactly once ───────────────────────────────────
   useEffect(() => {
-    if (fetchOnMount) {
-      fetchUserProfile();
-    }
-  }, [fetchOnMount]);
+    if (!fetchOnMount) return;
+    if (hasFetched.current) return;   // blocks StrictMode second invocation
+    hasFetched.current = true;
+
+    fetchUserProfile().catch(() => {
+      // error already set in state, no need to rethrow here
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
-    // State
     userProfile,
     profileImage,
     loading,
     error,
-
-    // Methods
     fetchUserProfile,
     updateUserProfile,
     updateProfileImage,
-    refreshProfile,
-
-    // Setters (for manual control)
+    refreshProfile: fetchUserProfile,   // alias — same function
     setUserProfile,
     setProfileImage,
   };

@@ -13,24 +13,69 @@ import {
   UserLock,
   Route,
   CloudCog,
+  Brain,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 
 // Import your feature components
-import EnhancedDashboard from "../features/dashboard/DashboardHome";
-import ProjectManagerDashboard from "../features/ProjectManager/Project";
-import { BlogUpload } from "../features/BlogUpload/BlogUpload";
-import ContactResponse from "../features/PortfolioResponses/ContactResponse";
-import WeeklyVisitsDashboard from "../features/VisitTracker/WeeklyVisitsDashboard";
-import RenderServiceDashboard from "../features/Server/backendHealthCheck";
-import Ipaddress from "../features/IpDatabase/Ipaddress";
-import ConversionPage from "../features/BinaryConverter/ConversionPage";
-// import Notepad from "../features/Notepad/Notepad";
-import AniListViewer from "../features/anime-list/AniListViewer";
-import DriveVideoPlayer from "../features/DVIDEO/videoPlayer";
-import RBACManagement from "../features/RBAC/page";
-import ActivitiesPage from "../features/Activity/activity";
-import CombinedDashboard from "../features/routeDashboard/page";
-import ApiKeyManagement from "../features/ApiKeys/page";
+const EnhancedDashboard = dynamic(
+  () => import("../features/dashboard/DashboardHome"),
+  { ssr: false },
+);
+const ProjectManagerDashboard = dynamic(
+  () => import("../features/ProjectManager/Project"),
+  { ssr: false },
+);
+const BlogUpload = dynamic(
+  () =>
+    import("../features/BlogUpload/BlogUpload").then((m) => ({
+      default: m.BlogUpload,
+    })),
+  { ssr: false },
+);
+const ContactResponse = dynamic(
+  () => import("../features/PortfolioResponses/ContactResponse"),
+  { ssr: false },
+);
+const WeeklyVisitsDashboard = dynamic(
+  () => import("../features/VisitTracker/WeeklyVisitsDashboard"),
+  { ssr: false },
+);
+const RenderServiceDashboard = dynamic(
+  () => import("../features/Server/backendHealthCheck"),
+  { ssr: false },
+);
+const Ipaddress = dynamic(() => import("../features/IpDatabase/Ipaddress"), {
+  ssr: false,
+});
+const ConversionPage = dynamic(
+  () => import("../features/BinaryConverter/ConversionPage"),
+  { ssr: false },
+);
+const AniListViewer = dynamic(
+  () => import("../features/anime-list/AniListViewer"),
+  { ssr: false },
+);
+const DriveVideoPlayer = dynamic(
+  () => import("../features/DVIDEO/videoPlayer"),
+  { ssr: false },
+);
+const RBACManagement = dynamic(() => import("../features/RBAC/page"), {
+  ssr: false,
+});
+const ActivitiesPage = dynamic(() => import("../features/Activity/activity"), {
+  ssr: false,
+});
+const CombinedDashboard = dynamic(
+  () => import("../features/routeDashboard/page"),
+  { ssr: false },
+);
+const ApiKeyManagement = dynamic(() => import("../features/ApiKeys/page"), {
+  ssr: false,
+});
+const OllamaPage = dynamic(() => import("../features/LLM/page"), {
+  ssr: false,
+});
 
 export const adminFeatures = {
   dashboard: {
@@ -41,6 +86,16 @@ export const adminFeatures = {
     roles: ["admin"],
     description: "Overview and analytics",
   },
+  render: {
+    title: "Server Status",
+    icon: Server,
+    gradient: "from-blue-500 to-purple-500",
+    image:
+      "https://res.cloudinary.com/dc1fkirb4/image/upload/v1763994657/render-dashboard_qyvptu.png",
+    component: RenderServiceDashboard,
+    roles: ["admin"],
+    description: "Monitor backend services",
+  },
   RBAC: {
     title: "RBAC",
     icon: UserLock,
@@ -48,6 +103,14 @@ export const adminFeatures = {
     component: RBACManagement,
     roles: ["admin"],
     description: "Role Based Access Control",
+  },
+  OLLAMA: {
+    title: "OLLAMA",
+    icon: Brain,
+    gradient: "from-cyan-500 to-blue-500",
+    component: OllamaPage,
+    roles: ["admin"],
+    description: "Chat With Local LLM",
   },
   activity: {
     title: "Recent Activities",
@@ -107,16 +170,6 @@ export const adminFeatures = {
     component: CombinedDashboard,
     roles: ["admin"],
     description: "Routes Discovery",
-  },
-  render: {
-    title: "Render Health Check",
-    icon: Server,
-    gradient: "from-blue-500 to-purple-500",
-    image:
-      "https://res.cloudinary.com/dc1fkirb4/image/upload/v1763994657/render-dashboard_qyvptu.png",
-    component: RenderServiceDashboard,
-    roles: ["admin"],
-    description: "Monitor backend services",
   },
 
   ip: {

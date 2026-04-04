@@ -22,7 +22,6 @@ export function useActivityStream() {
       }
 
       const data = await response.json();
-      
       // Ensure activities are sorted by timestamp (newest first)
       const sortedActivities = data.activities.sort((a, b) => 
         new Date(b.timestamp) - new Date(a.timestamp)

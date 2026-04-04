@@ -11,14 +11,195 @@ import {
   Check,
   X,
   Mail,
+  Plus,EyeOff
 } from "lucide-react";
+import { IconDeviceLaptop, IconShield } from "@tabler/icons-react";
 import Cropper from "react-easy-crop";
 import UserPageLayout from "../../components/useLayout";
 import useUserProfile from "@/hooks/useUserdata";
 import useApi from "@/services/authservices";
 import { useAuth } from "@/app/(protected)/context/authContext";
 import { useRouter } from "next/navigation";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 
+
+function BiometricCredentialSetup({
+  isDark,
+  textPrimary,
+  textMuted,
+  inputBg,
+  inputFocus,
+  buttonBg,
+  userEmail,
+}) {
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+  const [fileExists, setFileExists] = useState(false);
+
+  // Default file path — AppData so it's per-user
+  const FILE_PATH = `${process.env.APPDATA || "P:\\PROGRAMMING\\Programming Security Keys"}\\biometric_login.dat`;
+
+  // Check if file already exists when component mounts
+  useEffect(() => {
+    window.electron
+      ?.checkFileExists?.({ filePath: FILE_PATH })
+      .then((result) => setFileExists(result?.exists ?? false))
+      .catch(() => {});
+  }, [FILE_PATH]);
+
+  useEffect(() => {
+    if (success) {
+      const t = setTimeout(() => setSuccess(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [success]);
+
+  const handleSetup = async () => {
+    if (!password) {
+      setError("Please enter your current password to save it.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    // Step 1: biometric verification
+    const biometric = await window.electron?.biometricAuth();
+    if (!biometric?.success) {
+      setError(biometric?.reason || "Biometric verification failed.");
+      setSaving(false);
+      return;
+    }
+
+    // Step 2: save encrypted credentials file
+    const result = await window.electron?.saveBiometricCredentials({
+      email: userEmail,
+      password,
+      filePath: FILE_PATH,
+    });
+
+    if (result?.success) {
+      setSuccess(true);
+      setPassword("");
+      setFileExists(true);
+    } else {
+      setError(result?.reason || "Failed to save credentials file.");
+    }
+
+    setSaving(false);
+  };
+
+  const handleDelete = async () => {
+    const result = await window.electron?.deleteBiometricCredentials?.({
+      filePath: FILE_PATH,
+    });
+    if (result?.success) {
+      setFileExists(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Status */}
+      {fileExists && (
+        <div
+          className={`flex items-center justify-between p-3 rounded-lg border ${
+            isDark
+              ? "bg-green-500/10 border-green-500/30"
+              : "bg-green-50 border-green-300"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <Check className="w-4 h-4 text-green-400" />
+            <span
+              className={`text-sm ${isDark ? "text-green-400" : "text-green-700"}`}
+            >
+              Biometric login is set up on this machine
+            </span>
+          </div>
+          <button
+            onClick={handleDelete}
+            className={`text-xs px-2 py-1 rounded ${
+              isDark
+                ? "text-red-400 hover:bg-red-500/10"
+                : "text-red-600 hover:bg-red-50"
+            }`}
+          >
+            Remove
+          </button>
+        </div>
+      )}
+
+      {/* Error */}
+      {error && (
+        <div
+          className={`p-3 rounded-lg border text-sm ${
+            isDark
+              ? "bg-red-500/10 border-red-500/30 text-red-400"
+              : "bg-red-50 border-red-300 text-red-700"
+          }`}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Password input */}
+      <div>
+        <label className={`${textMuted} text-sm mb-2 block`}>
+          Your current password
+        </label>
+        <div className="relative">
+          <input
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Enter your password to encrypt the file"
+            className={`w-full h-10 px-3 pr-10 border rounded-lg text-sm focus:outline-none transition-colors ${inputBg} ${inputFocus} ${textPrimary}`}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((p) => !p)}
+            className={`absolute right-3 top-1/2 -translate-y-1/2 ${textMuted}`}
+          >
+            {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+          </button>
+        </div>
+      </div>
+
+      {/* Setup button */}
+      <button
+        onClick={handleSetup}
+        disabled={saving || !password}
+        className={`flex items-center gap-2 px-4 py-2.5 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${buttonBg}`}
+      >
+        {saving ? (
+          <Loader2 className="animate-spin" style={{ width: 15, height: 15 }} />
+        ) : success ? (
+          <Check style={{ width: 15, height: 15 }} />
+        ) : (
+          <IconShield style={{ width: 15, height: 15 }} />
+        )}
+        {saving
+          ? "Verifying fingerprint..."
+          : success
+            ? "Saved!"
+            : fileExists
+              ? "Update credentials file"
+              : "Set up biometric login"}
+      </button>
+
+      <p className={`text-xs ${textMuted}`}>
+        Your password is encrypted using AES-256 and can only be decrypted on
+        this specific machine.
+      </p>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SettingsPage() {
   const {
     userProfile,
@@ -38,37 +219,16 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [imageError, setImageError] = useState(null);
-  const [theme, setTheme] = useState("light");
   const fileInputRef = useRef(null);
   const apiFetch = useApi();
   const { setAccessToken, setIsAuthenticated } = useAuth();
   const router = useRouter();
 
-
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
-  const [showOtpModal, setShowOtpModal] = useState(false);
-  const [otp, setOtp] = useState("");
-  const [otpError, setOtpError] = useState("");
   const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const [otpTimer, setOtpTimer] = useState(0);
-  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  const { bgImage, theme } = useBackgroundContext();
 
   useEffect(() => {
     if (userProfile) {
@@ -86,16 +246,6 @@ export default function SettingsPage() {
     }
   }, [userProfile]);
 
-  // 🔐 NEW: OTP Timer countdown
-  useEffect(() => {
-    if (otpTimer > 0) {
-      const interval = setInterval(() => {
-        setOtpTimer((prev) => prev - 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [otpTimer]);
-
   const onCropComplete = useCallback((_, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
@@ -103,17 +253,14 @@ export default function SettingsPage() {
   const handleImageChange = useCallback((e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (!file.type.startsWith("image/")) {
       setImageError("Please select a valid image file");
       return;
     }
-
     if (file.size > 5 * 1024 * 1024) {
       setImageError("Image size must be less than 5MB");
       return;
     }
-
     setImageError(null);
     const reader = new FileReader();
     reader.onload = () => {
@@ -133,18 +280,14 @@ export default function SettingsPage() {
 
   const getCroppedImage = useCallback(async () => {
     if (!image || !croppedAreaPixels) return;
-
     setIsUploading(true);
     setImageError(null);
-
     try {
       const croppedBlob = await cropImage(image, croppedAreaPixels);
       await updateProfileImage(croppedBlob);
-
       setShowCropper(false);
       setImage(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
-
       setMessage({
         type: "success",
         text: "Profile picture updated successfully!",
@@ -160,7 +303,6 @@ export default function SettingsPage() {
   const handleSave = async () => {
     setLoading(true);
     setMessage({ type: "", text: "" });
-
     try {
       await updateUserProfile(settings);
       setMessage({ type: "success", text: "Settings updated successfully!" });
@@ -172,33 +314,22 @@ export default function SettingsPage() {
     }
   };
 
-
-
-  // 🔐 NEW: Step 1 - Send OTP for password change
   const handleSendOtp = async () => {
     setPasswordError("");
     setPasswordSuccess("");
-
     setIsSendingOtp(true);
-
     try {
+      console.log("Sending OTP to:", settings.email);
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/forgot-password`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email: settings.email
-          }),
+          body: JSON.stringify({ email: settings.email }),
         },
       );
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to send OTP");
-      }
-
+      if (!response.ok) throw new Error(data.message || "Failed to send OTP");
       setPasswordSuccess("Link sent to your email successfully.");
     } catch (error) {
       setPasswordError(
@@ -209,24 +340,16 @@ export default function SettingsPage() {
     }
   };
 
-  // Account Delete
   const handleAccountDelete = async () => {
     try {
       const res = await apiFetch(
         `${process.env.NEXT_PUBLIC_SERVER_API_URL}/auth/user/delete`,
-        {
-          method: "DELETE",
-        },
+        { method: "DELETE" },
       );
       const data = await res.json();
       if (data.success) {
-        const res = await apiFetch("/api/auth/logout", {
-          method: "POST",
-        });
-
-        if (!res.ok) {
-          throw new Error("Logout failed");
-        }
+        const res = await apiFetch("/api/auth/logout", { method: "POST" });
+        if (!res.ok) throw new Error("Logout failed");
         setAccessToken(null);
         setIsAuthenticated(false);
         router.push("/");
@@ -236,12 +359,9 @@ export default function SettingsPage() {
     }
   };
 
-  // Theme-based styles
   const isDark = theme === "dark";
   const loaderColor = isDark ? "text-purple-400" : "text-purple-600";
-  const cardBg = isDark
-    ? "bg-slate-800/50 border-white/10"
-    : "bg-white border-purple-200";
+  const cardBg = "bg-transparent backdrop-blur-xl border-white/10";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-gray-300" : "text-gray-700";
   const textMuted = isDark ? "text-gray-400" : "text-gray-600";
@@ -258,9 +378,7 @@ export default function SettingsPage() {
   const toggleActive = isDark ? "bg-purple-500" : "bg-purple-600";
   const toggleInactive = isDark ? "bg-gray-600" : "bg-gray-300";
   const infoBg = isDark ? "bg-white/5" : "bg-purple-50";
-  const dangerBg = isDark
-    ? "bg-red-900/20 border-red-500/30"
-    : "bg-red-50 border-red-300";
+  const dangerBg = "bg-transparent backdrop-blur-xl border-red-500/30";
   const dangerText = isDark ? "text-red-400" : "text-red-600";
   const dangerBtnBg = isDark
     ? "bg-red-600 hover:bg-red-700"
@@ -283,7 +401,9 @@ export default function SettingsPage() {
         className={`relative w-12 h-6 rounded-full transition-colors ${value ? toggleActive : toggleInactive}`}
       >
         <span
-          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${value ? "translate-x-6" : ""}`}
+          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+            value ? "translate-x-6" : ""
+          }`}
         />
       </button>
     </div>
@@ -304,23 +424,33 @@ export default function SettingsPage() {
       <div className="space-y-6">
         {message.text && (
           <div
-            className={`p-4 rounded-lg border transition-colors ${message.type === "success" ? (isDark ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-green-50 border-green-300 text-green-700") : isDark ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-red-50 border-red-300 text-red-700"}`}
+            className={`p-4 rounded-lg border transition-colors ${
+              message.type === "success"
+                ? isDark
+                  ? "bg-green-500/10 border-green-500/30 text-green-400"
+                  : "bg-green-50 border-green-300 text-green-700"
+                : isDark
+                  ? "bg-red-500/10 border-red-500/30 text-red-400"
+                  : "bg-red-50 border-red-300 text-red-700"
+            }`}
           >
             {message.text}
           </div>
         )}
         {imageError && (
           <div
-            className={`p-4 rounded-lg border transition-colors ${isDark ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-red-50 border-red-300 text-red-700"}`}
+            className={`p-4 rounded-lg border transition-colors ${
+              isDark
+                ? "bg-red-500/10 border-red-500/30 text-red-400"
+                : "bg-red-50 border-red-300 text-red-700"
+            }`}
           >
             {imageError}
           </div>
         )}
 
         {/* Profile Picture */}
-        <div
-          className={`${cardBg} backdrop-blur-xl rounded-2xl border p-6 transition-colors shadow-lg`}
-        >
+        <div className={`${cardBg} rounded-2xl border p-6 transition-colors`}>
           <h2
             className={`${textPrimary} text-xl font-bold mb-6 flex items-center gap-2`}
           >
@@ -337,13 +467,15 @@ export default function SettingsPage() {
                 />
               ) : (
                 <div
-                  className={`w-40 h-40 rounded-full ${isDark ? "bg-gray-700" : "bg-gray-200"} flex items-center justify-center`}
+                  className={`w-40 h-40 rounded-full ${
+                    isDark ? "bg-gray-700" : "bg-gray-200"
+                  } flex items-center justify-center`}
                 >
                   <User className={`w-16 h-16 ${textMuted}`} />
                 </div>
               )}
               <label
-                className={`absolute -bottom-2 -right-2 cursor-pointer ${buttonBg} rounded-full p-3 transition-colors shadow-lg`}
+                className={`absolute -bottom-2 -right-2 cursor-pointer ${buttonBg} rounded-full p-3 transition-colors`}
               >
                 <input
                   ref={fileInputRef}
@@ -362,9 +494,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Account Settings */}
-        <div
-          className={`${cardBg} backdrop-blur-xl rounded-2xl border p-6 transition-colors shadow-lg`}
-        >
+        <div className={`${cardBg} rounded-2xl border p-6 transition-colors`}>
           <h2
             className={`${textPrimary} text-xl font-bold mb-6 flex items-center gap-2`}
           >
@@ -393,35 +523,29 @@ export default function SettingsPage() {
                 type: "text",
                 editable: true,
               },
-            ].map(
-              (
-                { key, label, type, editable },
-              ) => (
-                <div key={key}>
-                  <label
-                    className={`${textSecondary} text-sm font-medium mb-2 block`}
-                  >
-                    {label}
-                    {!editable && (
-                      <span className="ml-2 text-xs opacity-60">
-                        (Read-only)
-                      </span>
-                    )}
-                  </label>
-                  <input
-                    type={type}
-                    value={settings[key] || ""}
-                    onChange={(e) =>
-                      setSettings({ ...settings, [key]: e.target.value })
-                    }
-                    disabled={!editable}
-                    className={`w-full ${inputBg} border rounded-lg px-4 py-3 ${textPrimary} focus:outline-none ${
-                      editable ? inputFocus : "cursor-not-allowed opacity-60"
-                    } transition-colors`}
-                  />
-                </div>
-              ),
-            )}
+            ].map(({ key, label, type, editable }) => (
+              <div key={key}>
+                <label
+                  className={`${textSecondary} text-sm font-medium mb-2 block`}
+                >
+                  {label}
+                  {!editable && (
+                    <span className="ml-2 text-xs opacity-60">(Read-only)</span>
+                  )}
+                </label>
+                <input
+                  type={type}
+                  value={settings[key] || ""}
+                  onChange={(e) =>
+                    setSettings({ ...settings, [key]: e.target.value })
+                  }
+                  disabled={!editable}
+                  className={`w-full ${inputBg} border rounded-lg px-4 py-3 ${textPrimary} focus:outline-none ${
+                    editable ? inputFocus : "cursor-not-allowed opacity-60"
+                  } transition-colors`}
+                />
+              </div>
+            ))}
             <div>
               <label
                 className={`${textSecondary} text-sm font-medium mb-2 block`}
@@ -441,9 +565,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Privacy Settings */}
-        <div
-          className={`${cardBg} backdrop-blur-xl rounded-2xl border p-6 transition-colors shadow-lg`}
-        >
+        <div className={`${cardBg} rounded-2xl border p-6 transition-colors`}>
           <h2
             className={`${textPrimary} text-xl font-bold mb-6 flex items-center gap-2`}
           >
@@ -489,58 +611,98 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* 🔐 UPDATED: Password Change with OTP */}
-        <div
-          className={`${cardBg} backdrop-blur-xl rounded-2xl border p-6 transition-colors shadow-lg`}
-        >
+        {/* Change Password */}
+        <div className={`${cardBg} rounded-2xl border p-6 transition-colors`}>
           <h2
             className={`${textPrimary} text-xl font-bold mb-6 flex items-center gap-2`}
           >
             <Lock className={`w-5 h-5 ${iconColor}`} />
             Change Password
           </h2>
-
           {passwordSuccess && (
             <div
-              className={`mb-4 p-4 rounded-lg border ${isDark ? "bg-green-500/10 border-green-500/30 text-green-400" : "bg-green-50 border-green-300 text-green-700"}`}
+              className={`mb-4 p-4 rounded-lg border ${
+                isDark
+                  ? "bg-green-500/10 border-green-500/30 text-green-400"
+                  : "bg-green-50 border-green-300 text-green-700"
+              }`}
             >
               {passwordSuccess}
             </div>
           )}
-
           {passwordError && (
             <div
-              className={`mb-4 p-4 rounded-lg border ${isDark ? "bg-red-500/10 border-red-500/30 text-red-400" : "bg-red-50 border-red-300 text-red-700"}`}
+              className={`mb-4 p-4 rounded-lg border ${
+                isDark
+                  ? "bg-red-500/10 border-red-500/30 text-red-400"
+                  : "bg-red-50 border-red-300 text-red-700"
+              }`}
             >
               {passwordError}
             </div>
           )}
+          <button
+            onClick={handleSendOtp}
+            disabled={isSendingOtp}
+            className={`w-full px-6 py-3 ${buttonBg} disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2`}
+          >
+            {isSendingOtp ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Sending Request...
+              </>
+            ) : (
+              <>
+                <Mail className="w-4 h-4" />
+                Send Reset Password Link to Email
+              </>
+            )}
+          </button>
+        </div>
 
-          <div className="space-y-4">
-            <button
-              onClick={handleSendOtp}
-              disabled={isSendingOtp}
-              className={`w-full px-6 py-3 ${buttonBg} disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors shadow-lg flex items-center justify-center gap-2`}
+        {/* Trusted Devices */}
+        <div className={`${cardBg} rounded-2xl border p-6 transition-colors`}>
+          <h2
+            className={`${textPrimary} text-xl font-bold mb-6 flex items-center gap-2`}
+          >
+            <IconShield
+              className={iconColor}
+              style={{ width: 20, height: 20 }}
+            />
+            Trusted Devices
+          </h2>
+          {/* Biometric Credentials File Setup */}
+          <div className={`${cardBg} rounded-2xl border p-6 transition-colors`}>
+            <h2
+              className={`${textPrimary} text-xl font-bold mb-6 flex items-center gap-2`}
             >
-              {isSendingOtp ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Sending Request...
-                </>
-              ) : (
-                <>
-                  <Mail className="w-4 h-4" />
-                  Send Reset Password Link to Email
-                </>
-              )}
-            </button>
+              <IconShield
+                className={iconColor}
+                style={{ width: 20, height: 20 }}
+              />
+              Biometric Quick Login
+            </h2>
+
+            <p className={`${textMuted} text-sm mb-4`}>
+              Save your credentials in an encrypted file on this machine. Next
+              time you open the app, just scan your finger — no email or
+              password needed.
+            </p>
+
+            <BiometricCredentialSetup
+              isDark={isDark}
+              textPrimary={textPrimary}
+              textMuted={textMuted}
+              inputBg={inputBg}
+              inputFocus={inputFocus}
+              buttonBg={buttonBg}
+              userEmail={settings.email}
+            />
           </div>
         </div>
 
         {/* Danger Zone */}
-        <div
-          className={`${dangerBg} backdrop-blur-xl rounded-2xl border p-6 transition-colors`}
-        >
+        <div className={`${dangerBg} rounded-2xl border p-6 transition-colors`}>
           <h2
             className={`${dangerText} text-xl font-bold mb-4 flex items-center gap-2`}
           >
@@ -552,7 +714,7 @@ export default function SettingsPage() {
             certain.
           </p>
           <button
-            className={`px-6 py-2 ${dangerBtnBg} text-white rounded-lg font-medium transition-colors shadow-lg cursor-pointer`}
+            className={`px-6 py-2 ${dangerBtnBg} text-white rounded-lg font-medium transition-colors cursor-pointer`}
             onClick={handleAccountDelete}
           >
             Delete Account
@@ -564,7 +726,7 @@ export default function SettingsPage() {
           <button
             onClick={handleSave}
             disabled={loading}
-            className={`px-8 py-3 ${buttonBg} disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2 shadow-lg`}
+            className={`px-8 py-3 ${buttonBg} disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2`}
           >
             {loading ? (
               <>
@@ -590,13 +752,16 @@ export default function SettingsPage() {
             <div className="absolute top-3 right-3 z-10">
               <button
                 onClick={handleCropperClose}
-                className={`${isDark ? "bg-slate-700 hover:bg-slate-600" : "bg-gray-200 hover:bg-gray-300"} ${isDark ? "text-white" : "text-gray-900"} p-2 rounded-full transition-colors`}
+                className={`${
+                  isDark
+                    ? "bg-slate-700 hover:bg-slate-600"
+                    : "bg-gray-200 hover:bg-gray-300"
+                } ${isDark ? "text-white" : "text-gray-900"} p-2 rounded-full transition-colors`}
                 disabled={isUploading}
               >
                 <X size={16} />
               </button>
             </div>
-
             <div className="w-full h-full rounded-xl overflow-hidden">
               <Cropper
                 image={image}
@@ -610,7 +775,6 @@ export default function SettingsPage() {
                 onCropComplete={onCropComplete}
               />
             </div>
-
             <div
               className={`absolute bottom-3 left-3 right-3 flex items-center justify-between ${cropperControlBg} rounded-lg px-4 py-2`}
             >
@@ -643,12 +807,11 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-      
     </UserPageLayout>
   );
 }
 
-// Helper functions
+// ─── Helper functions ─────────────────────────────────────────────────────────
 function createImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();

@@ -1,9 +1,10 @@
 {
   "name": "admin",
-  "version": "1.0.7",
+  "version": "1.2.0",
   "description": "Admin Desktop App",
   "main": "main.js",
   "author": "Achinta",
+  "downloadToken": "",
   "scripts": {
     "dev": "cd ADMIN && npm run dev",
     "build": "cd ADMIN && npm run build",
@@ -13,10 +14,12 @@
     "publish": "electron-builder --publish always"
   },
   "dependencies": {
+    "@electron-webauthn/native": "^0.0.6",
     "electron-updater": "^6.1.7",
     "next": "^14.0.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "systeminformation": "^5.31.5"
   },
   "devDependencies": {
     "electron": "^40.4.1",
@@ -29,10 +32,14 @@
     "directories": {
       "output": "dist"
     },
+    "extraMetadata": {
+      "downloadToken": "${GH_DOWNLOAD_TOKEN}"
+    },
     "files": [
       "main.js",
       "server.js",
       "preload.js",
+      "dialogBridge.js",
       "package.json",
       "ADMIN/.next/**/*",
       "ADMIN/public/**/*",
@@ -61,7 +68,7 @@
         "provider": "github",
         "owner": "Achinta005",
         "repo": "appsy",
-        "private": false,
+        "private": true,
         "releaseType": "release"
       }
     ]

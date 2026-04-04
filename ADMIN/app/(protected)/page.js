@@ -27,7 +27,6 @@ export default function HomePage() {
 
   // Handle Admin Login click
   const handleAdminLogin = () => {
-    console.log("api", process.env.NEXT_PUBLIC_SERVER_API_URL);
     if (isAuthenticated) {
       router.push("/admin");
     } else {
@@ -126,6 +125,13 @@ export default function HomePage() {
                 className="px-8 py-4 bg-white/10 backdrop-blur-lg text-white font-semibold rounded-xl hover:bg-white/20 transition-all border-2 border-white/20 hover:border-white/40 flex items-center gap-2 text-lg cursor-pointer"
               >
                 Admin Login
+              </button>
+              <button
+                onClick={() => router.push("/LLM")}
+                className="px-8 py-4 bg-white/10 backdrop-blur-lg text-white font-semibold rounded-xl hover:bg-white/20 transition-all border-2 border-cyan-400/40 hover:border-cyan-400/70 flex items-center gap-2 text-lg cursor-pointer"
+              >
+                <Terminal className="w-5 h-5 text-cyan-400" />
+                LLM Studio
               </button>
             </div>
           </div>

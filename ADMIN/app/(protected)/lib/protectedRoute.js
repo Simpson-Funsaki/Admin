@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/AuthLoader";
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const [theme, setTheme] = useState("light");
   const [countdown, setCountdown] = useState(3);
@@ -19,12 +19,12 @@ export default function ProtectedRoute({ children }) {
 
   // Update keys when transitioning between auth states
   useEffect(() => {
-    if (isAuthLoading) {
+    if (isLoading) {
       setVerifyingKey(Date.now());
     } else if (!isAuthenticated) {
       setUnauthorizedKey(Date.now());
     }
-  }, [isAuthLoading, isAuthenticated]);
+  }, [isLoading, isAuthenticated]);
 
   // Initialize and listen for theme changes
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function ProtectedRoute({ children }) {
   }, []);
 
   useEffect(() => {
-    if (!isAuthLoading && !isAuthenticated) {
+    if (!isLoading && !isAuthenticated) {
       // Start countdown from 3
       setCountdown(3);
 
@@ -67,9 +67,9 @@ export default function ProtectedRoute({ children }) {
         clearTimeout(redirectTimer);
       };
     }
-  }, [isAuthenticated, isAuthLoading, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  if (isAuthLoading) {
+  if (isLoading) {
     return <VerifyingLoader key={verifyingKey} theme={theme} />;
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import useApi from "@/services/authservices";
 
 export default function ConversionPage() {
@@ -13,23 +14,9 @@ export default function ConversionPage() {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [theme, setTheme] = useState("light");
   const apiFetch = useApi();
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const { theme } = useBackgroundContext();
 
   const handleNumberConversion = async () => {
     setLoading(true);
@@ -98,9 +85,6 @@ export default function ConversionPage() {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 to-indigo-100";
   const textPrimary = isDark ? "text-white" : "text-gray-800";
   const textSecondary = isDark ? "text-slate-400" : "text-gray-700";
   const textLabel = isDark ? "text-slate-300" : "text-gray-700";
@@ -115,7 +99,7 @@ export default function ConversionPage() {
   const errorButton = isDark ? "text-red-300 hover:text-red-100" : "text-red-700 hover:text-red-900";
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${bgGradient} p-8 transition-colors duration-300`}>
+    <div className={`min-h-screen bg-gradient-to-br p-8 transition-colors duration-300`}>
       <div className="max-w-4xl mx-auto">
         <h1 className={`text-4xl font-bold ${textPrimary} mb-8 text-center transition-colors`}>
           Number & IP Converter

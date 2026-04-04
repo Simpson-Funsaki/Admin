@@ -28,6 +28,12 @@ const HEALTH_SERVICES = [
     healthUrl: process.env.NEXT_PUBLIC_SERVICE3_HEALTH,
     type: "FastAPI",
   },
+    {
+    id: "service5",
+    name: "Log Service",
+    healthUrl: process.env.NEXT_PUBLIC_SERVICE5_HEALTH,
+    type: "MicroService",
+  },
 ];
 
 const FIVE_MINUTES = 5 * 60 * 1000;
@@ -83,6 +89,7 @@ export function useDashboardData() {
   const eventSourcesRef = useRef({});
   const pollIntervalsRef = useRef({});
   const { accessToken } = useAuth();
+  const { isAuthenticated } = useAuth();
   const apiFetch = useApi();
 
   // Check health of a single service (NO AUTH HEADER)
@@ -236,7 +243,7 @@ export function useDashboardData() {
   // Separate effect for authenticated data fetching
   useEffect(() => {
     // Don't fetch data if no accessToken
-    if (!accessToken) return;
+    if (!isAuthenticated) return;
 
     // Fetch all data sources in parallel
     const fetchPromises = Object.entries(DATA_SOURCES).map(([key, config]) => {
@@ -272,7 +279,7 @@ export function useDashboardData() {
       });
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accessToken]);
+  }, [isAuthenticated]);
 
   // Manual refresh function
   const refresh = useCallback(

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Search, Trash2, Globe, Calendar, X } from "lucide-react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import useApi from "@/services/authservices";
 
 const Ipaddress = () => {
@@ -8,23 +9,9 @@ const Ipaddress = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [theme, setTheme] = useState("light");
   const apiFetch = useApi();
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const {  theme } = useBackgroundContext();
 
   useEffect(() => {
     const getIps = async () => {
@@ -93,9 +80,6 @@ const Ipaddress = () => {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 via-purple-50 to-pink-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-slate-400" : "text-gray-600";
   const textMuted = isDark ? "text-slate-300" : "text-gray-700";
@@ -142,7 +126,7 @@ const Ipaddress = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${bgGradient} p-4 sm:p-6 lg:p-8 transition-colors duration-300`}>
+    <div className={`min-h-screen bg-gradient-to-br p-4 sm:p-6 lg:p-8 transition-colors duration-300`}>
       <div className="max-w-7xl mx-auto">
         {/* Header Section */}
         <div className="mb-8">

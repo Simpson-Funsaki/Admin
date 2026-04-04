@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   Activity,
   Clock,
@@ -32,30 +33,16 @@ export default function ActivitiesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [stats, setStats] = useState(null);
-  const [theme, setTheme] = useState("light");
 
   const itemsPerPage = 20;
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const { theme } = useBackgroundContext();
 
   const fetchActivities = async (page = 1) => {
     setLoading(true);
     try {
       const url = new URL(
-        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/activity/all`
+        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/activity/all`,
       );
       url.searchParams.append("page", page.toString());
       url.searchParams.append("limit", itemsPerPage.toString());
@@ -81,11 +68,11 @@ export default function ActivitiesPage() {
   const fetchStats = async () => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/activity/stats?days=7`
+        `${process.env.NEXT_PUBLIC_SERVER_API_URL}/activity/stats?days=7`,
       );
       if (response.ok) {
         const data = await response.json();
-        
+
         setStats(data);
       }
     } catch (error) {
@@ -102,7 +89,7 @@ export default function ActivitiesPage() {
     const filtered = activities.filter(
       (activity) =>
         activity.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        activity.type.toLowerCase().includes(searchTerm.toLowerCase())
+        activity.type.toLowerCase().includes(searchTerm.toLowerCase()),
     );
     setFilteredActivities(filtered);
   }, [searchTerm, activities]);
@@ -196,31 +183,47 @@ export default function ActivitiesPage() {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 via-purple-50 to-pink-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-gray-400" : "text-gray-600";
   const textMuted = isDark ? "text-gray-300" : "text-gray-700";
-  const cardBg = isDark ? "bg-slate-800/50 border-slate-700/50" : "bg-white border-purple-200";
-  const inputBg = isDark ? "bg-slate-900/50 border-slate-700" : "bg-white border-purple-200";
-  const inputFocus = isDark ? "focus:border-purple-500" : "focus:border-purple-400";
-  const buttonPrimary = isDark ? "bg-purple-600 hover:bg-purple-700" : "bg-purple-500 hover:bg-purple-600";
-  const buttonSecondary = isDark ? "bg-green-600 hover:bg-green-700" : "bg-green-500 hover:bg-green-600";
+  const cardBg = isDark
+    ? "bg-slate-800/50 border-slate-700/50"
+    : "bg-white border-purple-200";
+  const inputBg = isDark
+    ? "bg-slate-900/50 border-slate-700"
+    : "bg-white border-purple-200";
+  const inputFocus = isDark
+    ? "focus:border-purple-500"
+    : "focus:border-purple-400";
+  const buttonPrimary = isDark
+    ? "bg-purple-600 hover:bg-purple-700"
+    : "bg-purple-500 hover:bg-purple-600";
+  const buttonSecondary = isDark
+    ? "bg-green-600 hover:bg-green-700"
+    : "bg-green-500 hover:bg-green-600";
   const tableBorder = isDark ? "border-slate-700" : "border-purple-100";
   const tableHover = isDark ? "hover:bg-slate-700/30" : "hover:bg-purple-50";
-  const modalBg = isDark ? "bg-slate-800 border-slate-700" : "bg-white border-purple-200";
+  const modalBg = isDark
+    ? "bg-slate-800 border-slate-700"
+    : "bg-white border-purple-200";
   const modalOverlay = isDark ? "bg-black/50" : "bg-black/30";
   const statCardBg = isDark ? "bg-slate-800/30" : "bg-white/80";
   const statCardBorder = isDark ? "border-slate-700/50" : "border-purple-200";
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${bgGradient} p-6 transition-colors duration-300`}>
+    <div
+      className={`min-h-screen bg-gradient-to-br p-6 transition-colors duration-300`}
+
+    >
       <div className="max-w-7xl mx-auto space-y-6">
-        <div className={`${cardBg} backdrop-blur-xl rounded-xl p-6 border transition-colors shadow-lg`}>
+        <div
+          className={`${cardBg} backdrop-blur-xl rounded-xl p-6 border transition-colors shadow-lg`}
+        >
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div>
-              <h1 className={`text-3xl font-bold ${textPrimary} flex items-center gap-3`}>
+              <h1
+                className={`text-3xl font-bold ${textPrimary} flex items-center gap-3`}
+              >
                 <Activity className="w-8 h-8 text-purple-400" />
                 Activity Logs
               </h1>
@@ -248,7 +251,9 @@ export default function ActivitiesPage() {
 
           {stats && (
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
-              <div className={`${statCardBg} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+              <div
+                className={`${statCardBg} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+              >
                 <p className={`${textSecondary} text-sm`}>Total (7 days)</p>
                 <p className={`text-2xl font-bold ${textPrimary} mt-1`}>
                   {stats.total}
@@ -269,10 +274,14 @@ export default function ActivitiesPage() {
           )}
         </div>
 
-        <div className={`${cardBg} backdrop-blur-xl rounded-xl p-4 border transition-colors shadow-lg`}>
+        <div
+          className={`${cardBg} backdrop-blur-xl rounded-xl p-4 border transition-colors shadow-lg`}
+        >
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${textSecondary}`} />
+              <Search
+                className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${textSecondary}`}
+              />
               <input
                 type="text"
                 placeholder="Search activities..."
@@ -288,7 +297,11 @@ export default function ActivitiesPage() {
                 className={`${inputBg} border rounded-lg px-4 py-2.5 ${textPrimary} focus:outline-none ${inputFocus} min-w-[200px] transition-colors cursor-pointer`}
               >
                 {activityTypes.map((type) => (
-                  <option key={type} value={type} className={isDark ? "bg-slate-800" : "bg-white"}>
+                  <option
+                    key={type}
+                    value={type}
+                    className={isDark ? "bg-slate-800" : "bg-white"}
+                  >
                     {type === "all" ? "All Types" : type}
                   </option>
                 ))}
@@ -297,13 +310,17 @@ export default function ActivitiesPage() {
           </div>
         </div>
 
-        <div className={`${cardBg} backdrop-blur-xl rounded-xl border overflow-hidden transition-colors shadow-lg`}>
+        <div
+          className={`${cardBg} backdrop-blur-xl rounded-xl border overflow-hidden transition-colors shadow-lg`}
+        >
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
             </div>
           ) : filteredActivities.length === 0 ? (
-            <div className={`flex flex-col items-center justify-center py-20 ${textSecondary}`}>
+            <div
+              className={`flex flex-col items-center justify-center py-20 ${textSecondary}`}
+            >
               <Activity className="w-16 h-16 mb-4 opacity-50" />
               <p>No activities found</p>
             </div>
@@ -318,21 +335,33 @@ export default function ActivitiesPage() {
                     <col className="w-[15%]" />
                     <col className="w-[15%]" />
                   </colgroup>
-                  <thead className={`${isDark ? 'bg-slate-800/50' : 'bg-purple-50'} border-b ${tableBorder}`}>
+                  <thead
+                    className={`${isDark ? "bg-slate-800/50" : "bg-purple-50"} border-b ${tableBorder}`}
+                  >
                     <tr>
-                      <th className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}>
+                      <th
+                        className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}
+                      >
                         Type
                       </th>
-                      <th className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}>
+                      <th
+                        className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}
+                      >
                         Action
                       </th>
-                      <th className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}>
+                      <th
+                        className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}
+                      >
                         Timestamp
                       </th>
-                      <th className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}>
+                      <th
+                        className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}
+                      >
                         Status
                       </th>
-                      <th className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}>
+                      <th
+                        className={`px-4 py-3 text-left text-sm font-semibold ${textSecondary}`}
+                      >
                         Actions
                       </th>
                     </tr>
@@ -348,14 +377,16 @@ export default function ActivitiesPage() {
                           <td className="px-4 py-3">
                             <span
                               className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${getTypeColor(
-                                activity.type
+                                activity.type,
                               )}`}
                             >
                               <Tag className="w-3 h-3 flex-shrink-0 text-blue-400" />
                               <span className="truncate">{activity.type}</span>
                             </span>
                           </td>
-                          <td className={`px-4 py-3 ${textPrimary} text-sm truncate`}>
+                          <td
+                            className={`px-4 py-3 ${textPrimary} text-sm truncate`}
+                          >
                             {activity.action}
                           </td>
                           <td className={`px-4 py-3 ${textMuted} text-sm`}>
@@ -363,7 +394,9 @@ export default function ActivitiesPage() {
                               <Clock className="w-4 h-4 text-green-400 flex-shrink-0" />
                               <div className="min-w-0">
                                 <div className="truncate">{timeData.time}</div>
-                                <div className={`text-xs ${textSecondary} truncate`}>
+                                <div
+                                  className={`text-xs ${textSecondary} truncate`}
+                                >
                                   {timeData.relative}
                                 </div>
                               </div>
@@ -372,7 +405,9 @@ export default function ActivitiesPage() {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
                               {getStatusIcon(activity.status)}
-                              <span className={`text-sm ${textMuted} capitalize truncate`}>
+                              <span
+                                className={`text-sm ${textMuted} capitalize truncate`}
+                              >
                                 {activity.status || "N/A"}
                               </span>
                             </div>
@@ -393,7 +428,9 @@ export default function ActivitiesPage() {
                 </table>
               </div>
 
-              <div className={`flex items-center justify-between px-4 py-3 ${isDark ? 'bg-slate-800/30' : 'bg-purple-50'} border-t ${tableBorder} transition-colors`}>
+              <div
+                className={`flex items-center justify-between px-4 py-3 ${isDark ? "bg-slate-800/30" : "bg-purple-50"} border-t ${tableBorder} transition-colors`}
+              >
                 <p className={`text-sm ${textSecondary}`}>
                   Page {currentPage} of {totalPages}
                 </p>
@@ -401,7 +438,7 @@ export default function ActivitiesPage() {
                   <button
                     onClick={() => fetchActivities(currentPage - 1)}
                     disabled={currentPage === 1}
-                    className={`px-3 py-2 ${isDark ? 'bg-slate-700 hover:bg-slate-600' : 'bg-white hover:bg-gray-50'} rounded-lg ${textPrimary} disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm shadow-md border ${isDark ? 'border-slate-600' : 'border-purple-200'}`}
+                    className={`px-3 py-2 ${isDark ? "bg-slate-700 hover:bg-slate-600" : "bg-white hover:bg-gray-50"} rounded-lg ${textPrimary} disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm shadow-md border ${isDark ? "border-slate-600" : "border-purple-200"}`}
                   >
                     <ChevronLeft className="w-4 h-4" />
                     <span className="hidden sm:inline">Previous</span>
@@ -409,7 +446,7 @@ export default function ActivitiesPage() {
                   <button
                     onClick={() => fetchActivities(currentPage + 1)}
                     disabled={currentPage === totalPages}
-                    className={`px-3 py-2 ${isDark ? 'bg-slate-700 hover:bg-slate-600' : 'bg-white hover:bg-gray-50'} rounded-lg ${textPrimary} disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm shadow-md border ${isDark ? 'border-slate-600' : 'border-purple-200'}`}
+                    className={`px-3 py-2 ${isDark ? "bg-slate-700 hover:bg-slate-600" : "bg-white hover:bg-gray-50"} rounded-lg ${textPrimary} disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2 text-sm shadow-md border ${isDark ? "border-slate-600" : "border-purple-200"}`}
                   >
                     <span className="hidden sm:inline">Next</span>
                     <ChevronRight className="w-4 h-4" />
@@ -422,16 +459,24 @@ export default function ActivitiesPage() {
       </div>
 
       {selectedActivity && (
-        <div className={`fixed inset-0 ${modalOverlay} backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-colors`}>
-          <div className={`${modalBg} rounded-xl border max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl transition-colors`}>
-            <div className={`sticky top-0 ${modalBg} border-b ${tableBorder} p-6 flex items-center justify-between transition-colors`}>
-              <h2 className={`text-2xl font-bold ${textPrimary} flex items-center gap-3`}>
+        <div
+          className={`fixed inset-0 ${modalOverlay} backdrop-blur-sm z-50 flex items-center justify-center p-4 transition-colors`}
+        >
+          <div
+            className={`${modalBg} rounded-xl border max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl transition-colors`}
+          >
+            <div
+              className={`sticky top-0 ${modalBg} border-b ${tableBorder} p-6 flex items-center justify-between transition-colors`}
+            >
+              <h2
+                className={`text-2xl font-bold ${textPrimary} flex items-center gap-3`}
+              >
                 <FileText className="w-6 h-6 text-purple-400" />
                 Activity Details
               </h2>
               <button
                 onClick={() => setSelectedActivity(null)}
-                className={`p-2 ${isDark ? 'hover:bg-slate-700' : 'hover:bg-gray-100'} rounded-lg transition-colors`}
+                className={`p-2 ${isDark ? "hover:bg-slate-700" : "hover:bg-gray-100"} rounded-lg transition-colors`}
               >
                 <X className={`w-5 h-5 ${textSecondary}`} />
               </button>
@@ -439,7 +484,9 @@ export default function ActivitiesPage() {
 
             <div className="p-6 space-y-6">
               {selectedActivity.id && (
-                <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+                <div
+                  className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <Hash className={`w-4 h-4 ${textSecondary}`} />
                     <p className={`text-sm ${textSecondary}`}>Activity ID</p>
@@ -450,21 +497,25 @@ export default function ActivitiesPage() {
                 </div>
               )}
 
-              <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+              <div
+                className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <Tag className={`w-4 h-4 ${textSecondary}`} />
                   <p className={`text-sm ${textSecondary}`}>Type</p>
                 </div>
                 <span
                   className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${getTypeColor(
-                    selectedActivity.type
+                    selectedActivity.type,
                   )}`}
                 >
                   {selectedActivity.type}
                 </span>
               </div>
 
-              <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+              <div
+                className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <Activity className={`w-4 h-4 ${textSecondary}`} />
                   <p className={`text-sm ${textSecondary}`}>Action</p>
@@ -472,7 +523,9 @@ export default function ActivitiesPage() {
                 <p className={textPrimary}>{selectedActivity.action}</p>
               </div>
 
-              <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+              <div
+                className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <Calendar className={`w-4 h-4 ${textSecondary}`} />
                   <p className={`text-sm ${textSecondary}`}>Timestamp</p>
@@ -487,7 +540,9 @@ export default function ActivitiesPage() {
               </div>
 
               {selectedActivity.userId && (
-                <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+                <div
+                  className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <User className={`w-4 h-4 ${textSecondary}`} />
                     <p className={`text-sm ${textSecondary}`}>User ID</p>
@@ -499,7 +554,9 @@ export default function ActivitiesPage() {
               )}
 
               {selectedActivity.entityId && (
-                <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+                <div
+                  className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+                >
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className={`w-4 h-4 ${textSecondary}`} />
                     <p className={`text-sm ${textSecondary}`}>Entity ID</p>
@@ -510,7 +567,9 @@ export default function ActivitiesPage() {
                 </div>
               )}
 
-              <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+              <div
+                className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+              >
                 <div className="flex items-center gap-2 mb-2">
                   <Info className={`w-4 h-4 ${textSecondary}`} />
                   <p className={`text-sm ${textSecondary}`}>Status</p>
@@ -525,12 +584,16 @@ export default function ActivitiesPage() {
 
               {selectedActivity.metadata &&
                 Object.keys(selectedActivity.metadata).length > 0 && (
-                  <div className={`${isDark ? 'bg-slate-900/50' : 'bg-purple-50'} rounded-lg p-4 border ${statCardBorder} transition-colors`}>
+                  <div
+                    className={`${isDark ? "bg-slate-900/50" : "bg-purple-50"} rounded-lg p-4 border ${statCardBorder} transition-colors`}
+                  >
                     <div className="flex items-center gap-2 mb-3">
                       <FileText className={`w-4 h-4 ${textSecondary}`} />
                       <p className={`text-sm ${textSecondary}`}>Metadata</p>
                     </div>
-                    <pre className={`${isDark ? 'bg-black/30' : 'bg-white'} rounded-lg p-4 text-sm ${textMuted} overflow-x-auto border ${isDark ? 'border-slate-700' : 'border-purple-200'}`}>
+                    <pre
+                      className={`${isDark ? "bg-black/30" : "bg-white"} rounded-lg p-4 text-sm ${textMuted} overflow-x-auto border ${isDark ? "border-slate-700" : "border-purple-200"}`}
+                    >
                       {JSON.stringify(selectedActivity.metadata, null, 2)}
                     </pre>
                   </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   Route,
   MessageSquare,
@@ -38,24 +39,10 @@ export default function CombinedDashboard() {
   });
 
   // Common states
-  const [theme, setTheme] = useState("light");
   const [activeTab, setActiveTab] = useState("prompt");
   const apiFetch = useApi();
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const {  theme } = useBackgroundContext();
 
   // Fetch routes on mount
   useEffect(() => {
@@ -309,9 +296,6 @@ export default function CombinedDashboard() {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 to-indigo-100";
   const textPrimary = isDark ? "text-white" : "text-gray-800";
   const textSecondary = isDark ? "text-slate-400" : "text-gray-700";
   const textLabel = isDark ? "text-slate-300" : "text-gray-700";
@@ -353,7 +337,7 @@ export default function CombinedDashboard() {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${bgGradient} transition-colors duration-300`}
+      className={`min-h-screen bg-gradient-to-br transition-colors duration-300`}
     >
       <div className="max-w-7xl mx-auto p-4 md:p-8">
         {/* Header */}

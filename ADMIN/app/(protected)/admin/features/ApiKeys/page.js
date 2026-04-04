@@ -20,6 +20,7 @@ import {
   Link
 } from "lucide-react";
 import useApi from "@/services/authservices";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 
 // Service configurations - easily scalable
 const SERVICES = [
@@ -56,12 +57,12 @@ const SERVICES = [
     endpoint: "/api/keys/notification-service",
   },
   {
-    id: "analytics-service",
-    name: "Analytics Service",
+    id: "log-service",
+    name: "Log Service",
     icon: ChartBar,
     description: "Data analytics and reporting",
     color: "orange",
-    endpoint: "/api/keys/analytics-service",
+    endpoint: "/api/keys/log-service",
   },
 ];
 
@@ -80,7 +81,6 @@ export default function ApiKeyManagement() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [theme, setTheme] = useState("light");
   const [visibleKeys, setVisibleKeys] = useState(new Set());
   const [copiedKey, setCopiedKey] = useState(null);
   const [successMessage, setSuccessMessage] = useState(null);
@@ -95,20 +95,7 @@ export default function ApiKeyManagement() {
     description: "",
   });
 
-  // Initialize and listen for theme changes
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+const { theme } = useBackgroundContext();
 
   // Fetch all API keys
   useEffect(() => {
@@ -303,9 +290,6 @@ export default function ApiKeyManagement() {
 
   // Theme-based styles
   const isDark = theme === "dark";
-  const bgGradient = isDark
-    ? "from-slate-950 via-purple-950 to-slate-950"
-    : "from-blue-50 via-purple-50 to-pink-50";
   const textPrimary = isDark ? "text-white" : "text-gray-900";
   const textSecondary = isDark ? "text-gray-400" : "text-gray-600";
   const textMuted = isDark ? "text-gray-300" : "text-gray-700";
@@ -343,7 +327,7 @@ export default function ApiKeyManagement() {
   if (loading) {
     return (
       <div
-        className={`min-h-screen bg-gradient-to-br ${bgGradient} p-8 transition-colors duration-300`}
+        className={`min-h-screen bg-gradient-to-br p-8 transition-colors duration-300`}
       >
         <div className="flex items-center justify-center h-96">
           <div className="animate-spin rounded-full h-12 w-12 border-4 border-purple-500 border-t-transparent"></div>
@@ -354,7 +338,7 @@ export default function ApiKeyManagement() {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br ${bgGradient} p-8 transition-colors duration-300`}
+      className={`min-h-screen bg-gradient-to-br p-8 transition-colors duration-300`}
     >
       <div className="max-w-7xl mx-auto">
         {/* Header */}

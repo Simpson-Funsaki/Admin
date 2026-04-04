@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import useUserProfile from "@/hooks/useUserdata";
+import { useBackgroundContext } from "../../context/BackgroundContext";
 
 export default function AdminHeader({
   user,
@@ -29,11 +30,11 @@ export default function AdminHeader({
   activities,
   isConnected,
   userProfile,
+  theme,
 }) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [lastViewedActivityId, setLastViewedActivityId] = useState(null);
-  const [theme, setTheme] = useState("light");
   const [isSyncing, setIsSyncing] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
 
@@ -49,23 +50,6 @@ export default function AdminHeader({
       });
     }
   }, []);
-
-  useEffect(() => {
-    const localTheme = localStorage.getItem("theme") || "light";
-    setTheme(localTheme);
-  }, []);
-
-  useEffect(() => {
-    if (userProfile && !isSyncing) {
-      const localTheme = localStorage.getItem("theme") || "light";
-      if (localTheme !== userProfile.theme) {
-        setIsSyncing(true);
-        updateUserProfile({ NewTheme: localTheme }).finally(() => {
-          setIsSyncing(false);
-        });
-      }
-    }
-  }, [userProfile?.theme]);
 
   useEffect(() => {
     if (showNotifications && activities.length > 0 && !lastViewedActivityId) {
@@ -113,21 +97,18 @@ export default function AdminHeader({
     }
   };
 
-  const toggleTheme = async () => {
-    const currentTheme = localStorage.getItem("theme") || "light";
-    const newTheme = currentTheme === "dark" ? "light" : "dark";
-    setIsSyncing(true);
-    localStorage.setItem("theme", newTheme);
-    setTheme(newTheme);
-    window.dispatchEvent(
-      new StorageEvent("storage", { key: "theme", newValue: newTheme }),
-    );
-    try {
-      await updateUserProfile({ NewTheme: newTheme });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+const { setTheme } = useBackgroundContext();
+
+const toggleTheme = async () => {
+  const newTheme = theme === "dark" ? "light" : "dark";
+  setIsSyncing(true);
+  setTheme(newTheme);
+  try {
+    await updateUserProfile({ NewTheme: newTheme });
+  } finally {
+    setIsSyncing(false);
+  }
+};
 
   const getActivityColor = (type) => {
     const colors = {
@@ -154,8 +135,8 @@ export default function AdminHeader({
 
   const isDark = theme === "dark";
   const headerStyles = isDark
-    ? "bg-gradient-to-r from-slate-900/95 via-purple-900/95 to-slate-900/95 border-white/10"
-    : "bg-gradient-to-r from-white/95 via-purple-100/95 to-white/95 border-purple-200/50 shadow-lg";
+  ? "border-white/10 bg-white/5"
+  : "border-white/10 bg-white/5";
   const textColor = isDark ? "text-white" : "text-gray-900";
   const textMuted = isDark ? "text-gray-300" : "text-gray-600";
   const iconColor = isDark ? "text-gray-300" : "text-gray-600";
@@ -180,7 +161,7 @@ export default function AdminHeader({
       />
       {/* ADD HERE ↑ */}
 
-      <div className="px-4 sm:px-6 py-2">
+      <div className="px-4 sm:px-6 py-1">
         <div className="flex items-center justify-between gap-4">
           <div
             className="flex items-center gap-2 sm:gap-3 ml-auto"

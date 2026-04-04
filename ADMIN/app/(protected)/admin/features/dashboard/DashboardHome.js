@@ -1,9 +1,11 @@
+/* eslint-disable react-hooks/purity */
 "use client";
 
 import { useState, useEffect } from "react";
 import { useDashboardData } from "@/hooks/useDashboarddata";
 import { useActivityStream } from "@/hooks/useActivityStream";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { useBackgroundContext } from "@/app/(protected)/context/BackgroundContext";
 import {
   Users,
   MessageSquare,
@@ -69,14 +71,18 @@ const StatCard = ({
   trend,
   trendValue,
 }) => {
-  const isDark = theme === "dark";
-  const cardBg = isDark
-    ? "bg-white/10 border-white/20 hover:border-white/30"
-    : "bg-white border-gray-200 hover:border-purple-300";
-  const textPrimary = isDark ? "text-white" : "text-gray-900";
-  const textMuted = isDark ? "text-gray-400" : "text-gray-600";
-  const valueColor = isDark ? "text-emerald-400" : "text-emerald-600";
-  const errorColor = isDark ? "text-red-400" : "text-red-600";
+const isDark = theme === "dark";
+const cardBg = isDark
+  ? "bg-white/10 border-white/20 hover:border-white/30"
+  : "bg-white/60 backdrop-blur-md border-white/80 hover:border-emerald-200 shadow-sm shadow-black/5";
+
+const textPrimary = isDark ? "text-white" : "text-gray-900";
+
+const textMuted = isDark ? "text-gray-400" : "text-gray-600";  // was gray-500, now darker
+
+const valueColor = isDark ? "text-emerald-400" : "text-emerald-700";  // was emerald-600, deeper green
+
+const errorColor = isDark ? "text-red-400" : "text-red-500";
 
   return (
     <div
@@ -200,12 +206,19 @@ const VisitsGraph = ({ visits, loading, theme }) => {
     return `W${week}`;
   };
 
+  const parseWeekKey = (weekKey) => {
+    const [year, week] = weekKey.split("-W");
+    return parseInt(year) * 100 + parseInt(week);
+  };
+
   const chartData = Array.isArray(visits)
-    ? visits.map((v) => ({
-        week: v.week,
-        visits: v.visits || 0,
-        uniqueIPs: v.ipAddresses?.length || 0,
-      }))
+    ? visits
+        .map((v) => ({
+          week: v.week,
+          visits: v.visits || 0,
+          uniqueIPs: v.ipAddresses?.length || 0,
+        }))
+        .sort((a, b) => parseWeekKey(a.week) - parseWeekKey(b.week)) // ← add this
     : [];
 
   return (
@@ -1203,7 +1216,6 @@ const UserStatisticsCard = ({ stats, loading, theme }) => {
 };
 
 export default function EnhancedDashboard({ onFeatureSelect }) {
-  const [theme, setTheme] = useState("light");
   const [selectedDays, setSelectedDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -1234,25 +1246,14 @@ export default function EnhancedDashboard({ onFeatureSelect }) {
     isLoading: isAnalyticsLoading,
   } = useAnalytics(selectedDays);
 
-  useEffect(() => {
-    const savedTheme = localStorage.getItem("theme") || "light";
-    setTheme(savedTheme);
-
-    const handleStorageChange = (e) => {
-      if (e.key === "theme") {
-        setTheme(e.newValue || "light");
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  const { theme } = useBackgroundContext();
 
   const isDark = theme === "dark";
 
   const bgGradient = isDark
     ? "from-slate-950 via-purple-950 to-slate-950"
     : "from-blue-50 via-purple-50 to-pink-50";
+
   const cardBg = isDark
     ? "bg-white/10 border-white/20"
     : "bg-white border-gray-200";
@@ -1339,7 +1340,7 @@ export default function EnhancedDashboard({ onFeatureSelect }) {
     <div className="min-h-screen relative overflow-hidden">
       {/* Animated Background Layer */}
       <div
-        className={`fixed inset-0 bg-gradient-to-br ${bgGradient} transition-all duration-300`}
+        className={`fixed inset-0 bg-gradient-to-br transition-all duration-300`}
       >
         {isDark && (
           <>
@@ -1357,17 +1358,7 @@ export default function EnhancedDashboard({ onFeatureSelect }) {
             ></div>
           </>
         )}
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage: isDark
-              ? `linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px)`
-              : `linear-gradient(rgba(139, 92, 246, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(139, 92, 246, 0.05) 1px, transparent 1px)`,
-            backgroundSize: "50px 50px",
-          }}
-        ></div>
+        <div className="absolute inset-0"></div>
         <div
           className={`absolute inset-0 ${isDark ? "bg-gradient-to-t from-slate-900/50 to-transparent" : "bg-gradient-to-t from-white/30 to-transparent"}`}
         ></div>

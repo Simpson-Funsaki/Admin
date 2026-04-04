@@ -1,5 +1,6 @@
 import "./globals.css";
 import UpdateStatus from "@/components/UpdateStatus";
+import CustomDialog from "@/components/CustomDialog";
 
 export const metadata = {
   title: "",
@@ -10,6 +11,7 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body>
+        <CustomDialog />
         <UpdateStatus />
         {children}
       </body>
