@@ -42,7 +42,6 @@ next-env.d.ts
 
 .vscode
 dist
-icons
 npm
 appsy@0.1.0
 main.js
