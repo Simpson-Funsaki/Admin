@@ -22,10 +22,18 @@ jobs:
           cd ADMIN
           npm install
 
-      - name: Build ADMIN
+- name: Build ADMIN
         run: |
           cd ADMIN
           npm run build
+        env:
+          NEXT_PUBLIC_SERVER_API_URL: https://ficxus.onrender.com/api/admin
+          NEXT_PUBLIC_SERVICE1_HEALTH: https://main-server-69mo.onrender.com/api/health
+          NEXT_PUBLIC_SERVICE2_HEALTH: https://auth-micro-service-eudw.onrender.com/health
+          NEXT_PUBLIC_SERVICE3_HEALTH: https://fast-ml-server.onrender.com/health
+          NEXT_PUBLIC_SERVICE4_HEALTH: https://url-shortener-rc3e.onrender.com/health
+          NEXT_PUBLIC_SERVICE5_HEALTH: https://log-service-q7jb.onrender.com/health
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: BMRqSYBeSZWP7kQMWW9SCri1z_NktCCJypKWlr8Hc7koSjWrOKu6cUnE1YvjpNz0N4e3hT2zyvDLtiBMD3I40gs
 
      - name: Upload build to VM
         uses: appleboy/scp-action@v0.1.4
