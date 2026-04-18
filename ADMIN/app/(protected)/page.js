@@ -98,11 +98,11 @@ export default function HomePage() {
               <div className="relative">
                 <Shield className="w-16 h-16 text-cyan-400 animate-pulse" />
                 <Zap className="w-8 h-8 text-indigo-400 absolute -bottom-1 -right-1" />
-              </div> 
+              </div>
             </div>
 
             <h1 className="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-cyan-200 to-indigo-200 bg-clip-text text-transparent">
-              Admin Dashboard(test)
+              Admin Dashboard
               <br />
               <span className="text-4xl md:text-6xl">Centralized Control</span>
             </h1>
