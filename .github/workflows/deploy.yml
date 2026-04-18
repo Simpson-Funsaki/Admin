@@ -17,11 +17,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install ADMIN dependencies
+        run: |
+          cd ADMIN
+          npm install
 
-      - name: Build
-        run: npm run build
+      - name: Build ADMIN
+        run: |
+          cd ADMIN
+          npm run build
 
       - name: Upload build to VM
         uses: appleboy/scp-action@v0.1.4
@@ -29,10 +33,11 @@ jobs:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_KEY }}
-          source: ".next,public,package.json,package-lock.json"
-          target: "/var/www/admin/ADMIN"
+          source: "ADMIN/.next,ADMIN/public,ADMIN/package.json,ADMIN/package-lock.json"
+          target: "/var/www/admin"
+          strip_components: 1
 
-      - name: Install & Restart on VM
+      - name: Restart on VM
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.VM_HOST }}
