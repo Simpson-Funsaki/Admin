@@ -27,14 +27,14 @@ jobs:
           cd ADMIN
           npm run build
 
-      - name: Upload build to VM
+     - name: Upload build to VM
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VM_HOST }}
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_KEY }}
           source: "ADMIN/.next,ADMIN/public,ADMIN/package.json,ADMIN/package-lock.json"
-          target: "/var/www/admin"
+          target: "/var/www/admin/ADMIN"
           strip_components: 1
 
       - name: Restart on VM
