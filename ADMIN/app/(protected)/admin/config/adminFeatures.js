@@ -14,6 +14,7 @@ import {
   Route,
   CloudCog,
   Brain,
+  Music
 } from "lucide-react";
 import dynamic from "next/dynamic";
 
@@ -67,6 +68,10 @@ const ApiKeyManagement = dynamic(() => import("../features/ApiKeys/page"), {
   ssr: false,
 });
 const OllamaPage = dynamic(() => import("../features/LLM/page"), {
+  ssr: false,
+});
+
+const musicControl = dynamic(() => import("../features/musicUploader/page"), {
   ssr: false,
 });
 
@@ -183,6 +188,15 @@ export const adminFeatures = {
     component: DriveVideoPlayer,
     roles: ["admin"],
     description: "Drive playable videos",
+  },
+
+  musicControl: {
+    title: "Music Control",
+    icon: Music,
+    group: "tools",
+    component: musicControl,
+    roles: ["admin"],
+    description: "Control music playback",
   },
 };
 

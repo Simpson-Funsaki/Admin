@@ -90,54 +90,60 @@ export function useDashboardData() {
   const { isAuthenticated } = useAuth();
   const apiFetch = useApi();
 
-  // Check health of a single service (NO AUTH HEADER)
-  const checkServiceHealth = useCallback(async (service) => {
-    setCheckingServices((prev) => ({ ...prev, [service.id]: true }));
+  // In useDashboardData.js
 
-    // ✅ start timer before fetch so duration is always accurate
-    const t0 = Date.now();
+const checkServiceHealth = useCallback(async (service) => {
+  setCheckingServices((prev) => ({ ...prev, [service.id]: true }));
+  const t0 = Date.now();
 
-    try {
-      const res = await fetch(service.healthUrl, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-      const duration = Date.now() - t0; // ✅ capture after fetch completes
+    const res = await fetch(service.healthUrl, {
+      method: "GET",
+      // ← Remove Content-Type header entirely
+      // No headers = simple request = no preflight = no CORS issue
+      signal: controller.signal,
+    });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    clearTimeout(timeoutId);
+    const duration = Date.now() - t0;
 
-      setServiceHealth((prev) => ({
-        ...prev,
-        [service.id]: {
-          status: "operational",
-          name: service.name,
-          type: service.type,
-          duration, // ✅ stored in state
-          lastCheck: new Date().toISOString(),
-        },
-      }));
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      return true;
-    } catch (err) {
-      const duration = Date.now() - t0; // ✅ capture even on failure
+    setServiceHealth((prev) => ({
+      ...prev,
+      [service.id]: {
+        status: "operational",
+        name: service.name,
+        type: service.type,
+        duration,
+        lastCheck: new Date().toISOString(),
+      },
+    }));
 
-      setServiceHealth((prev) => ({
-        ...prev,
-        [service.id]: {
-          status: "down",
-          name: service.name,
-          type: service.type,
-          duration, // ✅ stored even on failure
-          lastCheck: new Date().toISOString(),
-          error: err.message,
-        },
-      }));
-      return false;
-    } finally {
-      setCheckingServices((prev) => ({ ...prev, [service.id]: false }));
-    }
-  }, []);
+    return true;
+  } catch (err) {
+    const duration = Date.now() - t0;
+    const isTimeout = err.name === "AbortError";
+
+    setServiceHealth((prev) => ({
+      ...prev,
+      [service.id]: {
+        status: "down",
+        name: service.name,
+        type: service.type,
+        duration,
+        lastCheck: new Date().toISOString(),
+        error: isTimeout ? "Timeout (8s)" : err.message,
+      },
+    }));
+    return false;
+  } finally {
+    setCheckingServices((prev) => ({ ...prev, [service.id]: false }));
+  }
+}, []);
 
   // Check all services
   const checkAllServices = useCallback(async () => {
