@@ -6,7 +6,8 @@ import {
     Play, Pause, X, Search, Trash2, Image as ImageIcon,
     ChevronDown, ChevronUp, Plus, CheckSquare, Square,
     Flame, Clock, Disc3, Mic2, Radio, Headphones,
-    AlertCircle, Loader2, Volume2
+    AlertCircle, Loader2, Volume2, ListMusic, Check,
+    PlusCircle, Pencil, MoreHorizontal
 } from 'lucide-react';
 import { useBackgroundContext } from '@/app/(protected)/context/BackgroundContext';
 
@@ -48,6 +49,111 @@ async function api(path, opts = {}) {
     return res.json();
 }
 
+// ─── Genre Badges (multi) ─────────────────────────────────────────────────────
+function GenreBadges({ genres, isDark, max = 2 }) {
+    if (!genres) return null;
+    const list = Array.isArray(genres) ? genres : [genres];
+    const shown = list.slice(0, max);
+    const rest = list.length - max;
+    return (
+        <div className="flex gap-1 flex-wrap">
+            {shown.map(g => (
+                <span key={g} className={`text-xs px-2 py-0.5 rounded-lg font-medium
+                    ${isDark ? 'bg-white/8 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
+                    {g}
+                </span>
+            ))}
+            {rest > 0 && (
+                <span className={`text-xs px-2 py-0.5 rounded-lg font-medium
+                    ${isDark ? 'bg-white/8 text-gray-500' : 'bg-gray-100 text-gray-400'}`}>
+                    +{rest}
+                </span>
+            )}
+        </div>
+    );
+}
+
+// ─── Genre Picker (multi-select) ──────────────────────────────────────────────
+function GenrePicker({ selected, onChange, isDark }) {
+    const [custom, setCustom] = useState('');
+
+    const toggle = (name) => {
+        if (selected.includes(name)) onChange(selected.filter(g => g !== name));
+        else onChange([...selected, name]);
+    };
+
+    const addCustom = () => {
+        const val = custom.trim();
+        if (val && !selected.includes(val)) onChange([...selected, val]);
+        setCustom('');
+    };
+
+    const remove = (name) => onChange(selected.filter(g => g !== name));
+
+    const inputCls = isDark
+        ? 'bg-white/5 border-white/10 text-white placeholder-gray-600 focus:border-violet-500 focus:ring-violet-500/20'
+        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-violet-400 focus:ring-violet-400/20';
+
+    return (
+        <div>
+            <label className={`block text-xs font-semibold uppercase tracking-wider mb-3
+                ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                Genre * <span className={`normal-case font-normal ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>(select multiple)</span>
+            </label>
+
+            {/* Selected tags */}
+            {selected.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                    {selected.map(g => (
+                        <span key={g} className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-sm font-medium border
+                            ${isDark ? 'bg-violet-500/20 border-violet-500/40 text-violet-300' : 'bg-violet-50 border-violet-200 text-violet-700'}`}>
+                            {PRESET_GENRES.find(p => p.name === g)?.icon ?? '🎵'} {g}
+                            <button onClick={() => remove(g)} className="hover:opacity-70 transition-opacity">
+                                <X size={12} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {/* Preset buttons */}
+            <div className="flex flex-wrap gap-2 mb-3">
+                {PRESET_GENRES.map(g => {
+                    const active = selected.includes(g.name);
+                    return (
+                        <button key={g.name} onClick={() => toggle(g.name)}
+                            className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-all flex items-center gap-1
+                                ${active
+                                    ? isDark ? 'bg-violet-500/20 border-violet-500 text-violet-300' : 'bg-violet-50 border-violet-400 text-violet-700'
+                                    : isDark ? 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
+                                }`}>
+                            {active && <Check size={11} />}
+                            {g.icon} {g.name}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Custom genre input */}
+            <div className="flex gap-2">
+                <input
+                    className={`flex-1 px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all ${inputCls}`}
+                    placeholder="Add custom genre…"
+                    value={custom}
+                    onChange={e => setCustom(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addCustom()}
+                />
+                <button onClick={addCustom}
+                    disabled={!custom.trim()}
+                    className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                        ${isDark ? 'bg-white/10 hover:bg-white/15 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                    Add
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // ─── Tab Bar ──────────────────────────────────────────────────────────────────
 function TabBar({ tabs, active, onChange, isDark }) {
     return (
@@ -76,9 +182,110 @@ function TabBar({ tabs, active, onChange, isDark }) {
     );
 }
 
+// ─── Add to Playlist Modal ────────────────────────────────────────────────────
+function AddToPlaylistModal({ track, isDark, onClose }) {
+    const [playlists, setPlaylists] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(null);
+    const [done, setDone] = useState([]);
+
+    useEffect(() => {
+        api('/playlists').then(setPlaylists).catch(console.error).finally(() => setLoading(false));
+    }, []);
+
+    const handleAdd = async (playlistId) => {
+        setSaving(playlistId);
+        try {
+            await api(`/playlists/${playlistId}/tracks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackIds: [track._id] }),
+            });
+            setDone(d => [...d, playlistId]);
+        } catch (e) {
+            alert(e.message);
+        } finally {
+            setSaving(null);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+                className={`relative w-full max-w-sm rounded-3xl border shadow-2xl p-5
+                    ${isDark ? 'bg-gray-900 border-white/10' : 'bg-white border-gray-200'}`}
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className={`font-bold text-base ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        Add to Playlist
+                    </h3>
+                    <button onClick={onClose}
+                        className={`w-8 h-8 rounded-xl flex items-center justify-center
+                            ${isDark ? 'hover:bg-white/10 text-gray-500' : 'hover:bg-gray-100 text-gray-400'}`}>
+                        <X size={15} />
+                    </button>
+                </div>
+                <p className={`text-sm mb-4 truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                    "{track.title}"
+                </p>
+
+                {loading ? (
+                    <div className="flex justify-center py-8">
+                        <Loader2 size={22} className={`animate-spin ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                    </div>
+                ) : playlists.length === 0 ? (
+                    <div className={`text-center py-8 text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                        No playlists yet. Create one first.
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                        {playlists.map(pl => {
+                            const added = done.includes(pl._id) || pl.trackIds?.includes(track._id);
+                            return (
+                                <div key={pl._id}
+                                    className={`flex items-center gap-3 px-3 py-3 rounded-xl border
+                                        ${isDark ? 'border-white/8 bg-white/3' : 'border-gray-100 bg-gray-50'}`}>
+                                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0
+                                        ${isDark ? 'bg-violet-500/20' : 'bg-violet-100'}`}>
+                                        <ListMusic size={15} className={isDark ? 'text-violet-400' : 'text-violet-600'} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{pl.name}</p>
+                                        <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                            {pl.trackIds?.length ?? 0} tracks
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={() => !added && handleAdd(pl._id)}
+                                        disabled={added || saving === pl._id}
+                                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5
+                                            ${added
+                                                ? isDark ? 'bg-emerald-500/20 text-emerald-400 cursor-default' : 'bg-emerald-50 text-emerald-600 cursor-default'
+                                                : isDark ? 'bg-violet-500/20 hover:bg-violet-500/30 text-violet-400' : 'bg-violet-50 hover:bg-violet-100 text-violet-600'
+                                            }`}>
+                                        {saving === pl._id
+                                            ? <Loader2 size={11} className="animate-spin" />
+                                            : added
+                                                ? <><Check size={11} /> Added</>
+                                                : <><Plus size={11} /> Add</>
+                                        }
+                                    </button>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 // ─── Track Row ────────────────────────────────────────────────────────────────
-function TrackRow({ track, isDark, onPlay, onDelete, onCoverUpload, playing, index }) {
+function TrackRow({ track, isDark, onPlay, onDelete, onCoverUpload, onAddToPlaylist, playing, index }) {
     const coverInputRef = useRef(null);
+    const genres = Array.isArray(track.genre) ? track.genre : (track.genre ? [track.genre] : []);
 
     return (
         <div className={`group flex items-center gap-4 px-4 py-3 rounded-2xl transition-all duration-200
@@ -125,11 +332,10 @@ function TrackRow({ track, isDark, onPlay, onDelete, onCoverUpload, playing, ind
                 </p>
             </div>
 
-            {/* Genre badge */}
-            <span className={`hidden md:inline-flex text-xs px-2.5 py-1 rounded-lg font-medium flex-shrink-0
-                ${isDark ? 'bg-white/8 text-gray-400' : 'bg-gray-100 text-gray-600'}`}>
-                {track.genre}
-            </span>
+            {/* Genre badges */}
+            <div className="hidden md:block flex-shrink-0">
+                <GenreBadges genres={genres} isDark={isDark} max={2} />
+            </div>
 
             {/* Duration */}
             {track.duration && (
@@ -142,6 +348,12 @@ function TrackRow({ track, isDark, onPlay, onDelete, onCoverUpload, playing, ind
             <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <input ref={coverInputRef} type="file" accept="image/*" className="hidden"
                     onChange={(e) => { if (e.target.files[0]) onCoverUpload(track._id, e.target.files[0]); }} />
+                <button onClick={() => onAddToPlaylist(track)}
+                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all
+                        ${isDark ? 'hover:bg-white/10 text-gray-500 hover:text-violet-400' : 'hover:bg-gray-100 text-gray-400 hover:text-violet-600'}`}
+                    title="Add to playlist">
+                    <ListMusic size={14} />
+                </button>
                 <button onClick={() => coverInputRef.current?.click()}
                     className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all
                         ${isDark ? 'hover:bg-white/10 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}
@@ -240,6 +452,7 @@ function TracksTab({ isDark }) {
     const [playingTrack, setPlayingTrack] = useState(null);
     const [streamUrl, setStreamUrl] = useState(null);
     const [search, setSearch] = useState('');
+    const [addToPlaylistTrack, setAddToPlaylistTrack] = useState(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -273,9 +486,10 @@ function TracksTab({ isDark }) {
         catch (e) { alert(e.message); }
     };
 
-    const filtered = tracks.filter(t =>
-        [t.title, t.artist, t.album, t.genre].some(v => v?.toLowerCase().includes(search.toLowerCase()))
-    );
+    const filtered = tracks.filter(t => {
+        const genres = Array.isArray(t.genre) ? t.genre : (t.genre ? [t.genre] : []);
+        return [t.title, t.artist, t.album, ...genres].some(v => v?.toLowerCase().includes(search.toLowerCase()));
+    });
 
     return (
         <div className="flex flex-col h-full">
@@ -286,7 +500,7 @@ function TracksTab({ isDark }) {
                 <input
                     className={`flex-1 bg-transparent text-sm focus:outline-none
                         ${isDark ? 'text-white placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
-                    placeholder="Search tracks, artists, albums…"
+                    placeholder="Search tracks, artists, albums, genres…"
                     value={search} onChange={e => setSearch(e.target.value)}
                 />
                 {search && (
@@ -296,14 +510,12 @@ function TracksTab({ isDark }) {
                 )}
             </div>
 
-            {/* Track count */}
             {!loading && (
                 <p className={`text-xs font-medium mb-3 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
                     {filtered.length} {filtered.length === 1 ? 'track' : 'tracks'}
                 </p>
             )}
 
-            {/* List */}
             <div className="flex-1 overflow-y-auto flex flex-col gap-1 pb-28">
                 {loading ? (
                     <div className="flex items-center justify-center py-20">
@@ -317,6 +529,7 @@ function TracksTab({ isDark }) {
                 ) : filtered.map((t, i) => (
                     <TrackRow key={t._id} track={t} index={i} isDark={isDark}
                         onPlay={handlePlay} onDelete={handleDelete} onCoverUpload={handleCoverUpload}
+                        onAddToPlaylist={setAddToPlaylistTrack}
                         playing={playingTrack?._id === t._id} />
                 ))}
             </div>
@@ -324,6 +537,14 @@ function TracksTab({ isDark }) {
             {playingTrack && streamUrl && (
                 <MiniPlayer track={playingTrack} streamUrl={streamUrl} isDark={isDark}
                     onClose={() => { setPlayingTrack(null); setStreamUrl(null); }} />
+            )}
+
+            {addToPlaylistTrack && (
+                <AddToPlaylistModal
+                    track={addToPlaylistTrack}
+                    isDark={isDark}
+                    onClose={() => setAddToPlaylistTrack(null)}
+                />
             )}
         </div>
     );
@@ -334,8 +555,7 @@ function UploadTab({ isDark }) {
     const [title, setTitle] = useState('');
     const [artist, setArtist] = useState('');
     const [album, setAlbum] = useState('');
-    const [selectedGenre, setSelectedGenre] = useState('');
-    const [customGenre, setCustomGenre] = useState('');
+    const [selectedGenres, setSelectedGenres] = useState([]);
     const [file, setFile] = useState(null);
     const [stage, setStage] = useState('idle');
     const [progress, setProgress] = useState(0);
@@ -343,8 +563,6 @@ function UploadTab({ isDark }) {
     const [uploadedTrack, setUploadedTrack] = useState(null);
     const [dragOver, setDragOver] = useState(false);
     const fileInputRef = useRef(null);
-
-    const finalGenre = customGenre.trim() || selectedGenre;
 
     const inputCls = isDark
         ? 'bg-white/5 border-white/10 text-white placeholder-gray-600 focus:border-violet-500 focus:ring-violet-500/20'
@@ -362,7 +580,7 @@ function UploadTab({ isDark }) {
     const handleUpload = async () => {
         if (!file) return setErrorMsg('Please select an audio file.');
         if (!title.trim()) return setErrorMsg('Please enter a title.');
-        if (!finalGenre) return setErrorMsg('Please select or enter a genre.');
+        if (selectedGenres.length === 0) return setErrorMsg('Please select at least one genre.');
         setErrorMsg(''); setStage('uploading'); setProgress(10);
         try {
             const formData = new FormData();
@@ -370,7 +588,8 @@ function UploadTab({ isDark }) {
             formData.append('title', title.trim());
             if (artist.trim()) formData.append('artist', artist.trim());
             if (album.trim()) formData.append('album', album.trim());
-            formData.append('genre', finalGenre);
+            // Send genres as JSON array string or join — depends on backend handling
+            formData.append('genre', JSON.stringify(selectedGenres));
             formData.append('fileName', file.name);
             formData.append('mimeType', file.type || 'audio/mpeg');
             formData.append('fileSize', String(file.size));
@@ -385,38 +604,52 @@ function UploadTab({ isDark }) {
     };
 
     const reset = () => {
-        setTitle(''); setArtist(''); setAlbum(''); setSelectedGenre(''); setCustomGenre('');
+        setTitle(''); setArtist(''); setAlbum(''); setSelectedGenres([]);
         setFile(null); setStage('idle'); setProgress(0); setErrorMsg(''); setUploadedTrack(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    if (stage === 'done') return (
-        <div className="flex flex-col items-center gap-6 text-center py-8">
-            <div className={`w-20 h-20 rounded-3xl flex items-center justify-center
-                ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-50'}`}>
-                <Music size={36} className={isDark ? 'text-emerald-400' : 'text-emerald-500'} />
-            </div>
-            <div>
-                <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Track Uploaded!</h2>
-                <p className={`mt-1 text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Your track is now in the library</p>
-            </div>
-            <div className={`w-full rounded-2xl border divide-y
-                ${isDark ? 'border-white/10 divide-white/10' : 'border-gray-100 divide-gray-100'}`}>
-                {[['Title', uploadedTrack?.title], ['Artist', uploadedTrack?.artist], ['Album', uploadedTrack?.album],
-                ['Genre', uploadedTrack?.genre], ['Size', formatSize(uploadedTrack?.fileSize)]]
-                    .filter(([, v]) => v).map(([k, v]) => (
-                        <div key={k} className="flex items-center justify-between px-5 py-3">
-                            <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{k}</span>
-                            <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{v}</span>
+    if (stage === 'done') {
+        const uploadedGenres = Array.isArray(uploadedTrack?.genre) ? uploadedTrack.genre : (uploadedTrack?.genre ? [uploadedTrack.genre] : []);
+        return (
+            <div className="flex flex-col items-center gap-6 text-center py-8">
+                <div className={`w-20 h-20 rounded-3xl flex items-center justify-center
+                    ${isDark ? 'bg-emerald-500/20' : 'bg-emerald-50'}`}>
+                    <Music size={36} className={isDark ? 'text-emerald-400' : 'text-emerald-500'} />
+                </div>
+                <div>
+                    <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Track Uploaded!</h2>
+                    <p className={`mt-1 text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Your track is now in the library</p>
+                </div>
+                <div className={`w-full rounded-2xl border divide-y
+                    ${isDark ? 'border-white/10 divide-white/10' : 'border-gray-100 divide-gray-100'}`}>
+                    {[['Title', uploadedTrack?.title], ['Artist', uploadedTrack?.artist], ['Album', uploadedTrack?.album],
+                    ['Size', formatSize(uploadedTrack?.fileSize)]]
+                        .filter(([, v]) => v).map(([k, v]) => (
+                            <div key={k} className="flex items-center justify-between px-5 py-3">
+                                <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{k}</span>
+                                <span className={`text-sm font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>{v}</span>
+                            </div>
+                        ))}
+                    {uploadedGenres.length > 0 && (
+                        <div className="flex items-center justify-between px-5 py-3">
+                            <span className={`text-sm ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>Genres</span>
+                            <div className="flex gap-1.5 flex-wrap justify-end">
+                                {uploadedGenres.map(g => (
+                                    <span key={g} className={`text-xs px-2 py-0.5 rounded-lg font-medium
+                                        ${isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-50 text-violet-600'}`}>{g}</span>
+                                ))}
+                            </div>
                         </div>
-                    ))}
+                    )}
+                </div>
+                <button onClick={reset}
+                    className="w-full py-3.5 rounded-2xl font-semibold text-white bg-violet-600 hover:bg-violet-500 transition-colors">
+                    Upload Another Track
+                </button>
             </div>
-            <button onClick={reset}
-                className="w-full py-3.5 rounded-2xl font-semibold text-white bg-violet-600 hover:bg-violet-500 transition-colors">
-                Upload Another Track
-            </button>
-        </div>
-    );
+        );
+    }
 
     return (
         <div className="flex flex-col gap-5 pb-6">
@@ -477,30 +710,8 @@ function UploadTab({ isDark }) {
             </div>
             <Field label="Album" value={album} onChange={setAlbum} placeholder="Album name (optional)" inputCls={inputCls} isDark={isDark} />
 
-            {/* Genre */}
-            <div>
-                <label className={`block text-xs font-semibold uppercase tracking-wider mb-3
-                    ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Genre *</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                    {PRESET_GENRES.map(g => (
-                        <button key={g.name}
-                            onClick={() => { setSelectedGenre(g.name); setCustomGenre(''); }}
-                            className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-all
-                                ${selectedGenre === g.name && !customGenre
-                                    ? isDark ? 'bg-violet-500/20 border-violet-500 text-violet-300' : 'bg-violet-50 border-violet-400 text-violet-700'
-                                    : isDark ? 'bg-white/5 border-white/10 text-gray-400 hover:border-white/20' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300'
-                                }`}>
-                            {g.icon} {g.name}
-                        </button>
-                    ))}
-                </div>
-                <input
-                    className={`w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all ${inputCls}`}
-                    placeholder="Or type a custom genre…"
-                    value={customGenre}
-                    onChange={e => { setCustomGenre(e.target.value); setSelectedGenre(''); }}
-                />
-            </div>
+            {/* Multi-genre picker */}
+            <GenrePicker selected={selectedGenres} onChange={setSelectedGenres} isDark={isDark} />
 
             {/* Error */}
             {errorMsg && (
@@ -525,7 +736,6 @@ function UploadTab({ isDark }) {
                 </div>
             )}
 
-            {/* Submit */}
             <button onClick={handleUpload} disabled={stage === 'uploading'}
                 className="w-full py-3.5 rounded-2xl font-semibold text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
                 {stage === 'uploading'
@@ -599,6 +809,304 @@ function LibraryTab({ isDark }) {
     );
 }
 
+// ─── Playlists Tab ────────────────────────────────────────────────────────────
+function PlaylistsTab({ isDark }) {
+    const [playlists, setPlaylists] = useState([]);
+    const [tracks, setTracks] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [view, setView] = useState('list'); // 'list' | 'create' | 'detail'
+    const [selected, setSelected] = useState(null);
+
+    // Create form
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [pickedTrackIds, setPickedTrackIds] = useState([]);
+    const [saving, setSaving] = useState(false);
+    const [errorMsg, setErrorMsg] = useState('');
+    const [searchTracks, setSearchTracks] = useState('');
+
+    // Detail view — manage tracks
+    const [detailPlaylist, setDetailPlaylist] = useState(null);
+    const [removingSaving, setRemovingSaving] = useState(null);
+
+    const inputCls = isDark
+        ? 'bg-white/5 border-white/10 text-white placeholder-gray-600 focus:border-violet-500 focus:ring-violet-500/20'
+        : 'bg-gray-50 border-gray-200 text-gray-900 placeholder-gray-400 focus:border-violet-400 focus:ring-violet-400/20';
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [pl, tr] = await Promise.all([api('/playlists'), api('/tracks')]);
+            setPlaylists(pl); setTracks(tr);
+        } catch (e) { console.error(e); }
+        finally { setLoading(false); }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const handleCreate = async () => {
+        if (!name.trim()) return setErrorMsg('Playlist name is required.');
+        setSaving(true); setErrorMsg('');
+        try {
+            await api('/playlists', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name.trim(), description: description.trim(), trackIds: pickedTrackIds }),
+            });
+            setName(''); setDescription(''); setPickedTrackIds('');
+            await load();
+            setView('list');
+        } catch (e) { setErrorMsg(e.message); }
+        finally { setSaving(false); }
+    };
+
+    const handleDelete = async (id) => {
+        if (!confirm('Delete this playlist?')) return;
+        try { await api(`/playlists/${id}`, { method: 'DELETE' }); load(); }
+        catch (e) { alert(e.message); }
+    };
+
+    const handleRemoveTrack = async (playlistId, trackId) => {
+        setRemovingSaving(trackId);
+        try {
+            await api(`/playlists/${playlistId}/tracks/${trackId}`, { method: 'DELETE' });
+            setDetailPlaylist(pl => ({
+                ...pl,
+                trackIds: pl.trackIds.filter(id => id !== trackId),
+            }));
+            // refresh playlists in background
+            api('/playlists').then(setPlaylists).catch(() => { });
+        } catch (e) { alert(e.message); }
+        finally { setRemovingSaving(null); }
+    };
+
+    const filteredTracks = tracks.filter(t =>
+        [t.title, t.artist].some(v => v?.toLowerCase().includes(searchTracks.toLowerCase()))
+    );
+
+    const toggleTrack = (id) => {
+        setPickedTrackIds(prev =>
+            prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+        );
+    };
+
+    // ── Create view ──
+    if (view === 'create') return (
+        <div className="flex flex-col gap-5 pb-6">
+            <div className="flex items-center gap-3 mb-1">
+                <button onClick={() => setView('list')}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors
+                        ${isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                    <X size={16} />
+                </button>
+                <h2 className={`text-base font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>New Playlist</h2>
+            </div>
+
+            <Field label="Name *" value={name} onChange={setName} placeholder="My Playlist" inputCls={inputCls} isDark={isDark} />
+            <Field label="Description" value={description} onChange={setDescription} placeholder="Optional description…" inputCls={inputCls} isDark={isDark} />
+
+            {/* Track picker */}
+            <div>
+                <label className={`block text-xs font-semibold uppercase tracking-wider mb-3
+                    ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
+                    Add Tracks
+                    {pickedTrackIds.length > 0 && (
+                        <span className={`ml-2 normal-case font-normal ${isDark ? 'text-violet-400' : 'text-violet-600'}`}>
+                            {pickedTrackIds.length} selected
+                        </span>
+                    )}
+                </label>
+
+                <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border mb-3
+                    ${isDark ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                    <Search size={13} className={isDark ? 'text-gray-500' : 'text-gray-400'} />
+                    <input
+                        className={`flex-1 bg-transparent text-sm focus:outline-none
+                            ${isDark ? 'text-white placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}`}
+                        placeholder="Search tracks…"
+                        value={searchTracks} onChange={e => setSearchTracks(e.target.value)}
+                    />
+                </div>
+
+                <div className={`rounded-2xl border overflow-hidden max-h-64 overflow-y-auto
+                    ${isDark ? 'border-white/10' : 'border-gray-100'}`}>
+                    {filteredTracks.length === 0 ? (
+                        <div className={`px-4 py-8 text-center text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                            No tracks
+                        </div>
+                    ) : filteredTracks.map((t) => {
+                        const checked = pickedTrackIds.includes(t._id);
+                        return (
+                            <button key={t._id}
+                                onClick={() => toggleTrack(t._id)}
+                                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors border-b last:border-0
+                                    ${isDark ? 'border-white/5 hover:bg-white/5' : 'border-gray-50 hover:bg-gray-50'}
+                                    ${checked ? isDark ? 'bg-violet-500/10' : 'bg-violet-50/60' : ''}`}>
+                                <div className={`w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 border transition-all
+                                    ${checked
+                                        ? 'bg-violet-600 border-violet-600'
+                                        : isDark ? 'border-white/20 bg-white/5' : 'border-gray-300 bg-white'
+                                    }`}>
+                                    {checked && <Check size={12} className="text-white" strokeWidth={3} />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.title}</p>
+                                    <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{t.artist || 'Unknown'}</p>
+                                </div>
+                                {t.duration && (
+                                    <span className={`text-xs tabular-nums ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                        {formatDuration(t.duration)}
+                                    </span>
+                                )}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {errorMsg && (
+                <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm
+                    ${isDark ? 'bg-red-500/10 border-red-500/30 text-red-400' : 'bg-red-50 border-red-200 text-red-600'}`}>
+                    <AlertCircle size={15} /> {errorMsg}
+                </div>
+            )}
+
+            <button onClick={handleCreate} disabled={saving}
+                className="w-full py-3.5 rounded-2xl font-semibold text-white bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+                {saving ? <><Loader2 size={16} className="animate-spin" /> Creating…</> : <><PlusCircle size={16} /> Create Playlist</>}
+            </button>
+        </div>
+    );
+
+    // ── Detail view ──
+    if (view === 'detail' && detailPlaylist) {
+        const detailTracks = tracks.filter(t => detailPlaylist.trackIds?.includes(t._id));
+        return (
+            <div className="flex flex-col gap-4 pb-6">
+                <div className="flex items-center gap-3">
+                    <button onClick={() => { setView('list'); setDetailPlaylist(null); }}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors
+                            ${isDark ? 'hover:bg-white/10 text-gray-400' : 'hover:bg-gray-100 text-gray-500'}`}>
+                        <X size={16} />
+                    </button>
+                    <div className="flex-1 min-w-0">
+                        <h2 className={`text-base font-bold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{detailPlaylist.name}</h2>
+                        {detailPlaylist.description && (
+                            <p className={`text-xs truncate ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>{detailPlaylist.description}</p>
+                        )}
+                    </div>
+                    <span className={`text-xs px-2.5 py-1 rounded-full font-medium
+                        ${isDark ? 'bg-violet-500/20 text-violet-400' : 'bg-violet-50 text-violet-600'}`}>
+                        {detailTracks.length} track{detailTracks.length !== 1 ? 's' : ''}
+                    </span>
+                </div>
+
+                {detailTracks.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 gap-3">
+                        <ListMusic size={40} className={isDark ? 'text-gray-700' : 'text-gray-300'} />
+                        <p className={`text-sm ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>No tracks in this playlist</p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-1">
+                        {detailTracks.map((t, i) => (
+                            <div key={t._id}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-2xl border
+                                    ${isDark ? 'border-white/8 hover:bg-white/5' : 'border-gray-100 hover:bg-gray-50'}`}>
+                                <span className={`text-xs font-mono w-5 text-center flex-shrink-0 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                    {String(i + 1).padStart(2, '0')}
+                                </span>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-sm font-medium truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{t.title}</p>
+                                    <p className={`text-xs ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>{t.artist || 'Unknown'}</p>
+                                </div>
+                                {t.duration && (
+                                    <span className={`text-xs tabular-nums ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>
+                                        {formatDuration(t.duration)}
+                                    </span>
+                                )}
+                                <button
+                                    onClick={() => handleRemoveTrack(detailPlaylist._id, t._id)}
+                                    disabled={removingSaving === t._id}
+                                    className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all
+                                        ${isDark ? 'hover:bg-red-500/15 text-gray-600 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'}`}>
+                                    {removingSaving === t._id
+                                        ? <Loader2 size={13} className="animate-spin" />
+                                        : <X size={13} />
+                                    }
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // ── List view ──
+    return (
+        <div className="flex flex-col gap-3 pb-6">
+            <div className="flex justify-end mb-1">
+                <button onClick={() => setView('create')}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-violet-600 hover:bg-violet-500 transition-colors">
+                    <Plus size={15} /> New Playlist
+                </button>
+            </div>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-20">
+                    <Loader2 size={24} className={`animate-spin ${isDark ? 'text-gray-600' : 'text-gray-400'}`} />
+                </div>
+            ) : playlists.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center
+                        ${isDark ? 'bg-white/5' : 'bg-gray-100'}`}>
+                        <ListMusic size={28} className={isDark ? 'text-gray-600' : 'text-gray-400'} />
+                    </div>
+                    <div className="text-center">
+                        <p className={`text-sm font-medium ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>No playlists yet</p>
+                        <p className={`text-xs mt-1 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}>Create your first playlist to organise your music</p>
+                    </div>
+                    <button onClick={() => setView('create')}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white bg-violet-600 hover:bg-violet-500 transition-colors">
+                        <Plus size={15} /> Create Playlist
+                    </button>
+                </div>
+            ) : playlists.map(pl => (
+                <div key={pl._id}
+                    className={`flex items-center gap-4 px-4 py-4 rounded-2xl border transition-all
+                        ${isDark ? 'border-white/10 hover:bg-white/5' : 'border-gray-100 hover:bg-gray-50'}`}>
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0
+                        ${isDark ? 'bg-violet-500/20' : 'bg-violet-100'}`}>
+                        <ListMusic size={20} className={isDark ? 'text-violet-400' : 'text-violet-600'} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-semibold truncate ${isDark ? 'text-white' : 'text-gray-900'}`}>{pl.name}</p>
+                        <p className={`text-xs mt-0.5 ${isDark ? 'text-gray-500' : 'text-gray-500'}`}>
+                            {pl.trackIds?.length ?? 0} track{(pl.trackIds?.length ?? 0) !== 1 ? 's' : ''}
+                            {pl.description ? ` · ${pl.description}` : ''}
+                        </p>
+                    </div>
+                    <div className="flex gap-1">
+                        <button
+                            onClick={() => { setDetailPlaylist(pl); setView('detail'); }}
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all
+                                ${isDark ? 'hover:bg-white/10 text-gray-500 hover:text-gray-300' : 'hover:bg-gray-100 text-gray-400 hover:text-gray-600'}`}
+                            title="View tracks">
+                            <ChevronDown size={14} />
+                        </button>
+                        <button onClick={() => handleDelete(pl._id)}
+                            className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all
+                                ${isDark ? 'hover:bg-red-500/15 text-gray-500 hover:text-red-400' : 'hover:bg-red-50 text-gray-400 hover:text-red-500'}`}
+                            title="Delete playlist">
+                            <Trash2 size={14} />
+                        </button>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
 // ─── Stats Tab ────────────────────────────────────────────────────────────────
 function StatsTab({ isDark }) {
     const [mostPlayed, setMostPlayed] = useState([]);
@@ -648,7 +1156,6 @@ function StatsTab({ isDark }) {
 
     return (
         <div className="flex flex-col gap-4 pb-6">
-            {/* Stat cards */}
             <div className="grid grid-cols-3 gap-3">
                 {[
                     { label: 'Total Tracks', value: recentlyAdded.length === 10 ? '10+' : recentlyAdded.length, icon: Disc3 },
@@ -712,6 +1219,7 @@ export default function MusicManagerPage() {
     const TABS = [
         { id: 'tracks', label: 'Tracks', icon: <Music size={15} /> },
         { id: 'upload', label: 'Upload', icon: <Upload size={15} /> },
+        { id: 'playlists', label: 'Playlists', icon: <ListMusic size={15} /> },
         { id: 'library', label: 'Library', icon: <Library size={15} /> },
         { id: 'stats', label: 'Stats', icon: <BarChart2 size={15} /> },
     ];
@@ -745,7 +1253,7 @@ export default function MusicManagerPage() {
                             Manage your music library
                         </p>
                     </div>
-                    <div className="flex-1 max-w-md">
+                    <div className="flex-1 max-w-2xl">
                         <TabBar tabs={TABS} active={activeTab} onChange={setActiveTab} isDark={isDark} />
                     </div>
                 </div>
@@ -757,6 +1265,7 @@ export default function MusicManagerPage() {
                     <div className="flex-1 overflow-y-auto">
                         {activeTab === 'tracks' && <TracksTab isDark={isDark} />}
                         {activeTab === 'upload' && <UploadTab isDark={isDark} />}
+                        {activeTab === 'playlists' && <PlaylistsTab isDark={isDark} />}
                         {activeTab === 'library' && <LibraryTab isDark={isDark} />}
                         {activeTab === 'stats' && <StatsTab isDark={isDark} />}
                     </div>
